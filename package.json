@@ -1,0 +1,10 @@
+{
+  "name": "wisp-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": ["core", "react", "server"],
+  "scripts": {
+    "build": "node react/build.js",
+    "poc": "node server/src/host.js"
+  }
+}
