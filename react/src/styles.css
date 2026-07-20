@@ -99,6 +99,8 @@
 .wisp-pending-th button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: var(--w-ink); color: #fff; font-size: 11px; cursor: pointer; line-height: 1; }
 .wisp-attach { width: 38px; height: 38px; flex-shrink: 0; border: 1px solid var(--w-line); border-radius: 50%; background: var(--w-bg); color: var(--w-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .wisp-attach:hover { color: var(--w-accent); border-color: var(--w-accent); }
+/* attach stacked above send on the right — the textarea gets the full width */
+.wisp-btncol { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; justify-content: flex-end; }
 .wisp-input { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--w-line); flex-shrink: 0; }
 .wisp-input textarea { flex: 1; resize: none; border: 1px solid var(--w-line); border-radius: 20px; padding: 9px 14px; font: inherit; font-size: 15px; max-height: 120px; outline: none; color: var(--w-ink); background: var(--w-bg); field-sizing: content; }
 .wisp-input textarea:focus { border-color: var(--w-accent); }
