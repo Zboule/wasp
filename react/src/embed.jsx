@@ -19,8 +19,12 @@ export function mount(el, opts = {}) {
   injectCss();
   const target = typeof el === "string" ? document.querySelector(el) : el;
   const root = createRoot(target);
-  root.render(<Panel {...opts} />);
-  return { unmount: () => root.unmount() };
+  let client = null;
+  root.render(<Panel {...opts} onClientReady={(c) => (client = c)} />);
+  return {
+    unmount: () => root.unmount(),
+    refreshHistory: () => client?.refreshHistory?.(),
+  };
 }
 
 export { Panel, useWisp };

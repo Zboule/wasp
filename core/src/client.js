@@ -50,6 +50,46 @@ export function createWispClient({ endpoint = "", app, sessionId, historyUrl, on
       .catch(() => {});
   }
 
+  async function fetchHistory() {
+    if (!historyUrl) return null;
+    try {
+      const r = await fetch(historyUrl);
+      return r.ok ? await r.json() : null;
+    } catch {
+      return null;
+    }
+  }
+  function hydrateFrom(h) {
+    const timeline = h.messages.map((m) => ({
+      kind: m.role === "user" ? "user" : "assistant",
+      id: uid(),
+      text: m.text || "",
+      attachments: [],
+    }));
+    store.getState().dispatch({ type: LOCAL.HYDRATE, timeline });
+  }
+
+  // The connection died mid-run (phone backgrounded, network blip) but the
+  // agent keeps working server-side. Poll history until its answer lands,
+  // then swap it in — instead of surfacing a scary dead-end error.
+  async function recoverViaHistory() {
+    const seen = new Set(
+      store.getState().timeline.filter((t) => t.kind === "assistant" && t.text).map((t) => t.text),
+    );
+    const deadline = Date.now() + 12 * 60 * 1000;
+    while (Date.now() < deadline) {
+      const h = await fetchHistory();
+      const last = h?.messages?.[h.messages.length - 1];
+      if (last && last.role === "assistant" && last.text && !seen.has(last.text)) {
+        hydrateFrom(h);
+        store.getState().dispatch({ type: EV.RUN_FINISHED });
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 4000));
+    }
+    store.getState().dispatch({ type: EV.RUN_ERROR, message: "Connection lost — reload to sync." });
+  }
+
   async function run(body) {
     controller = new AbortController();
     const { dispatch } = store.getState();
@@ -83,6 +123,8 @@ export function createWispClient({ endpoint = "", app, sessionId, historyUrl, on
     } catch (e) {
       if (e.name === "AbortError") {
         store.getState().dispatch({ type: EV.RUN_FINISHED });
+      } else if (historyUrl) {
+        await recoverViaHistory(); // agent keeps working server-side
       } else {
         store.getState().dispatch({ type: EV.RUN_ERROR, message: e.message });
         onError?.(e);
@@ -115,6 +157,17 @@ export function createWispClient({ endpoint = "", app, sessionId, historyUrl, on
     },
     interrupt() {
       controller?.abort();
+    },
+    // Re-sync from persisted history (e.g. when the panel is reopened after
+    // the app was backgrounded while a run completed server-side).
+    async refreshHistory() {
+      if (store.getState().status === "running") return;
+      const h = await fetchHistory();
+      if (!h?.messages?.length) return;
+      const textItems = store
+        .getState()
+        .timeline.filter((t) => (t.kind === "user" || t.kind === "assistant") && t.text).length;
+      if (h.messages.length > textItems) hydrateFrom(h);
     },
     reset() {
       store.getState().dispatch({ type: LOCAL.RESET });

@@ -5,7 +5,10 @@ import { createWispClient } from "@wisp/core";
 // Rendering layer only — all state lives in @wisp/core.
 export function useWisp(config) {
   const ref = useRef(null);
-  if (!ref.current) ref.current = createWispClient(config);
+  if (!ref.current) {
+    ref.current = createWispClient(config);
+    config?.onClientReady?.(ref.current);
+  }
   const client = ref.current;
   const state = useSyncExternalStore(client.store.subscribe, client.store.getState, client.store.getState);
   return {
@@ -14,6 +17,7 @@ export function useWisp(config) {
     approve: client.approve,
     deny: client.deny,
     interrupt: client.interrupt,
+    refreshHistory: client.refreshHistory,
     reset: client.reset,
   };
 }
