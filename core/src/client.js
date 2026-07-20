@@ -87,7 +87,7 @@ export function createWispClient({ endpoint = "", app, sessionId, historyUrl, on
       }
       await new Promise((r) => setTimeout(r, 4000));
     }
-    store.getState().dispatch({ type: EV.RUN_ERROR, message: "Connection lost — reload to sync." });
+    store.getState().dispatch({ type: EV.RUN_ERROR, message: "Connection lost. Reload to sync." });
   }
 
   async function run(body) {
