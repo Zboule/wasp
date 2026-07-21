@@ -26,7 +26,7 @@
 .wisp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--w-accent); box-shadow: 0 0 8px var(--w-accent); }
 .wisp-title { font-weight: 700; }
 
-.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 
 .wisp-empty { margin: auto; text-align: center; color: var(--w-muted); }
 .wisp-empty-em { font-size: 34px; }
