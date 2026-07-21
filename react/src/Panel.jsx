@@ -269,7 +269,6 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
             </svg>
           </button>
         )}
-        <span className="wisp-chrome-title">{title}</span>
         <span className="wisp-chrome-sp" />
       </div>
 
