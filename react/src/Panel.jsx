@@ -278,8 +278,6 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
           </button>
         )}
         <span className="wisp-chrome-sp" />
-        {/* deploy canary: visible proof the running bundle is current */}
-        <span className="wisp-canary" aria-hidden="true">✨</span>
       </div>
 
       <div className="wisp-scrollwrap">

@@ -25,7 +25,6 @@
 .wisp-back svg { vertical-align: middle; }
 .wisp-back:active { transform: scale(0.94); }
 .wisp-chrome-sp { width: 42px; flex-shrink: 0; }
-.wisp-canary { margin-left: auto; font-size: 15px; opacity: 0.75; line-height: 1; }
 
 .wisp-scrollwrap { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 .wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: calc(64px + env(safe-area-inset-top)) 16px calc(156px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); display: flex; flex-direction: column; gap: 12px; }
