@@ -25,7 +25,7 @@
 .wisp-chrome-sp { width: 42px; flex-shrink: 0; }
 
 .wisp-scrollwrap { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
-.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: calc(66px + env(safe-area-inset-top)) 14px calc(150px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); display: flex; flex-direction: column; gap: 12px; }
+.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: calc(78px + env(safe-area-inset-top)) 16px calc(156px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); display: flex; flex-direction: column; gap: 12px; }
 .wisp-jump { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); z-index: 4; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--w-line); background: var(--w-bg); color: var(--w-ink); font-size: 18px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.14); cursor: pointer; }
 
 .wisp-empty { margin: auto; text-align: center; color: var(--w-muted); }
