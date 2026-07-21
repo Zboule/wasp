@@ -24,6 +24,10 @@ export function mount(el, opts = {}) {
   return {
     unmount: () => root.unmount(),
     refreshHistory: () => client?.refreshHistory?.(),
+    isBusy: () => {
+      const s = client?.store?.getState?.();
+      return s?.status === "running" || !!s?.pendingApproval;
+    },
   };
 }
 

@@ -192,15 +192,23 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
     const vv = window.visualViewport;
     if (!vv) return;
     const update = () => {
-      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      rootRef.current?.style.setProperty("--wisp-kb", kb + "px");
+      const el = rootRef.current;
+      if (!el) return;
+      // Overlap between the panel's own bottom edge and the visible area,
+      // both in layout-viewport coords. window.innerHeight lies when iOS
+      // restores a tab with a stale layout viewport; this stays correct.
+      const visibleBottom = vv.offsetTop + vv.height;
+      const kb = Math.max(0, el.getBoundingClientRect().bottom - visibleBottom);
+      el.style.setProperty("--wisp-kb", kb + "px");
     };
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
+    window.addEventListener("pageshow", update);
     update();
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
+      window.removeEventListener("pageshow", update);
     };
   }, []);
 
