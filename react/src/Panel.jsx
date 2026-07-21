@@ -194,9 +194,11 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
     }
   }
 
+  const running = wisp.status === "running";
   const submit = (e) => {
     e?.preventDefault?.();
-    if ((!text.trim() && !pending.length) || wisp.status === "running") return;
+    if (running) return wisp.interrupt(); // send button doubles as stop
+    if (!text.trim() && !pending.length) return;
     wisp.send(text, pending);
     setText("");
     setPending([]);
@@ -209,11 +211,6 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
       <div className="wisp-header">
         <span className="wisp-dot" />
         <span className="wisp-title">{title}</span>
-        {wisp.status === "running" && (
-          <button className="wisp-stop" onClick={wisp.interrupt}>
-            Stop
-          </button>
-        )}
       </div>
 
       <div className="wisp-scroll" ref={scroller}>
@@ -332,11 +329,12 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
             </>
           )}
           <button
-            className="wisp-send"
+            className={running ? "wisp-send stop" : "wisp-send"}
             type="submit"
-            disabled={(!text.trim() && !pending.length) || wisp.status === "running"}
+            disabled={!running && !text.trim() && !pending.length}
+            aria-label={running ? "Stop" : "Send"}
           >
-            ↑
+            {running ? "◼" : "↑"}
           </button>
         </div>
       </form>
