@@ -334,7 +334,13 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
             disabled={!running && !text.trim() && !pending.length}
             aria-label={running ? "Stop" : "Send"}
           >
-            {running ? "◼" : "↑"}
+            {running ? (
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <rect width="12" height="12" rx="2.5" fill="currentColor" />
+              </svg>
+            ) : (
+              "↑"
+            )}
           </button>
         </div>
       </form>
