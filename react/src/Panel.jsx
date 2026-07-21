@@ -266,7 +266,15 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
           return <ToolChip key={item.id} item={item} />;
         })}
 
-        {wisp.status === "running" && <WorkingPill timeline={wisp.timeline} />}
+        {(() => {
+          // the pill covers silent gaps only — when the last item already
+          // shows a live indicator (thinking chip, running tool), skip it
+          const last = wisp.timeline[wisp.timeline.length - 1];
+          const lastLive =
+            (last?.kind === "thinking" && !last.done) ||
+            (last?.kind === "tool" && last.status === "running");
+          return wisp.status === "running" && !lastLive ? <WorkingPill timeline={wisp.timeline} /> : null;
+        })()}
 
         {wisp.pendingApproval && (
           <div className="wisp-approval">
