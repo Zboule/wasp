@@ -15,20 +15,16 @@
   font-size: 15px;
 }
 .wisp * { box-sizing: border-box; }
-.wisp-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--w-line);
-  flex-shrink: 0;
-}
-.wisp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--w-accent); box-shadow: 0 0 8px var(--w-accent); }
-.wisp-title { font-weight: 700; }
+/* floating chrome over the thread (Claude-app style) */
+.wisp { position: relative; }
+.wisp-topfade { position: absolute; top: 0; left: 0; right: 0; height: 64px; z-index: 3; pointer-events: none; background: linear-gradient(var(--w-bg) 20%, transparent); }
+.wisp-back { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 12px; z-index: 4; width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.65); background: rgb(255 255 255 / 0.55); backdrop-filter: blur(14px) saturate(1.5); -webkit-backdrop-filter: blur(14px) saturate(1.5); box-shadow: 0 2px 12px rgb(0 0 0 / 0.12); color: var(--w-ink); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.wisp-back:active { transform: scale(0.94); }
+.wisp-title-float { position: absolute; top: calc(19px + env(safe-area-inset-top)); left: 64px; right: 64px; z-index: 3; text-align: center; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 
 .wisp-scrollwrap { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
-.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
-.wisp-jump { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--w-line); background: var(--w-bg); color: var(--w-ink); font-size: 18px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.14); cursor: pointer; }
+.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: calc(60px + env(safe-area-inset-top)) 14px calc(150px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); display: flex; flex-direction: column; gap: 12px; }
+.wisp-jump { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); z-index: 4; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--w-line); background: var(--w-bg); color: var(--w-ink); font-size: 18px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.14); cursor: pointer; }
 
 .wisp-empty { margin: auto; text-align: center; color: var(--w-muted); }
 .wisp-empty-em { font-size: 34px; }
@@ -96,14 +92,15 @@
 
 .wisp-att { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
 .wisp-att img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; }
-.wisp-pending { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 12px 0; flex-shrink: 0; }
+.wisp-pending { position: absolute; left: 12px; right: 12px; bottom: calc(130px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); z-index: 5; display: flex; gap: 8px; flex-wrap: wrap; }
 .wisp-pending-th { position: relative; width: 56px; height: 56px; }
 .wisp-pending-th img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; border: 1px solid var(--w-line); }
 .wisp-pending-th button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: var(--w-ink); color: #fff; font-size: 11px; cursor: pointer; line-height: 1; }
 .wisp-attach { width: 40px; height: 40px; flex-shrink: 0; border: 1px solid var(--w-line); border-radius: 50%; background: var(--w-bg); color: var(--w-ink); font-size: 22px; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .wisp-attach:hover { color: var(--w-accent); border-color: var(--w-accent); }
-/* one rounded composer card: text on top, action row below (Claude-style) */
-.wisp-input { display: flex; flex-direction: column; gap: 8px; margin: 8px 12px calc(10px + env(safe-area-inset-bottom)); padding: 10px 10px 10px; border: 1px solid var(--w-line); border-radius: 22px; background: var(--w-bg); box-shadow: 0 2px 12px rgb(0 0 0 / 0.06); flex-shrink: 0; }
+/* the composer floats over the thread (content scrolls behind it) and rides
+   above the iOS keyboard via --wisp-kb from the visualViewport tracker */
+.wisp-input { position: absolute; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); z-index: 5; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--w-line); border-radius: 22px; background: rgb(255 255 255 / 0.88); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 6px 24px rgb(0 0 0 / 0.12); }
 .wisp-input:focus-within { border-color: var(--w-accent); }
 .wisp-input textarea { resize: none; border: none; padding: 4px 6px; font: inherit; font-size: 15.5px; min-height: 44px; max-height: 140px; outline: none; color: var(--w-ink); background: none; field-sizing: content; }
 .wisp-input-row { display: flex; align-items: center; gap: 8px; }

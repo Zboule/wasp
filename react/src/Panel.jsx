@@ -157,7 +157,7 @@ function ToolChip({ item }) {
   );
 }
 
-export function Panel({ title = "Assistant", placeholder = "Ask the agent…", suggestions = [], uploadUrl, ...config }) {
+export function Panel({ title = "Assistant", placeholder = "Ask the agent…", suggestions = [], uploadUrl, onBack, ...config }) {
   const wisp = useWisp(config);
   // Draft lives in sessionStorage so no remount/reload/late agent event can
   // wipe half-typed text.
@@ -180,6 +180,25 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
   const nearBottom = useRef(true);
   const fileRef = useRef(null);
   const scroller = useRef(null);
+
+  const rootRef = useRef(null);
+  useEffect(() => {
+    // iOS doesn't resize the layout viewport when the keyboard opens — track
+    // the visual viewport and push the floating composer up by the overlap.
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      rootRef.current?.style.setProperty("--wisp-kb", kb + "px");
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
 
   const onScroll = () => {
     const el = scroller.current;
@@ -237,11 +256,16 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
   const empty = wisp.timeline.length === 0;
 
   return (
-    <div className="wisp">
-      <div className="wisp-header">
-        <span className="wisp-dot" />
-        <span className="wisp-title">{title}</span>
-      </div>
+    <div className="wisp" ref={rootRef}>
+      <div className="wisp-topfade" />
+      {onBack && (
+        <button type="button" className="wisp-back" onClick={onBack} aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 5l-7 7 7 7" />
+          </svg>
+        </button>
+      )}
+      <div className="wisp-title-float">{title}</div>
 
       <div className="wisp-scrollwrap">
       <div className="wisp-scroll" ref={scroller} onScroll={onScroll}>
