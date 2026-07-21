@@ -95,7 +95,7 @@ function ThinkingChip({ item }) {
     return (
       <div className="wisp-think live">
         <div className="wisp-think-head">
-          <span className="wisp-think-ico">💭</span> thinking…
+          <span className="wisp-row"><span className="wisp-think-ico">💭</span> thinking…</span>
         </div>
         {item.text.trim() ? <div className="wisp-think-body streaming">{item.text}</div> : null}
       </div>
@@ -104,8 +104,10 @@ function ThinkingChip({ item }) {
   return (
     <div className="wisp-think">
       <button className="wisp-think-head" onClick={() => setOpen((o) => !o)}>
-        <span className="wisp-think-ico">💭</span> thought
-        <span className="wisp-tool-caret">{open ? "▾" : "▸"}</span>
+        <span className="wisp-row">
+          <span className="wisp-think-ico">💭</span> thought
+          <span className="wisp-tool-caret">{open ? "▾" : "▸"}</span>
+        </span>
       </button>
       {open && <div className="wisp-think-body">{item.text}</div>}
     </div>
@@ -140,10 +142,12 @@ function ToolChip({ item }) {
   return (
     <div className={`wisp-tool ${item.status}`}>
       <button className="wisp-tool-head" onClick={() => setOpen((o) => !o)}>
-        <span className="wisp-tool-ico">{item.status === "running" ? <span className="wisp-spin" /> : "✓"}</span>
-        <span className="wisp-tool-name">{item.name}</span>
-        {item.status === "running" && <span className="wisp-tool-sub">working…</span>}
-        <span className="wisp-tool-caret">{open ? "▾" : "▸"}</span>
+        <span className="wisp-row">
+          <span className="wisp-tool-ico">{item.status === "running" ? <span className="wisp-spin" /> : "✓"}</span>
+          <span className="wisp-tool-name">{item.name}</span>
+          {item.status === "running" && <span className="wisp-tool-sub">working…</span>}
+          <span className="wisp-tool-caret">{open ? "▾" : "▸"}</span>
+        </span>
       </button>
       {open && (
         <div className="wisp-tool-body">
@@ -257,15 +261,17 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
 
   return (
     <div className="wisp" ref={rootRef}>
-      <div className="wisp-topfade" />
-      {onBack && (
-        <button type="button" className="wisp-back" onClick={onBack} aria-label="Back">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-        </button>
-      )}
-      <div className="wisp-title-float">{title}</div>
+      <div className="wisp-chrome">
+        {onBack && (
+          <button type="button" className="wisp-back" onClick={onBack} aria-label="Back">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </button>
+        )}
+        <span className="wisp-chrome-title">{title}</span>
+        <span className="wisp-chrome-sp" />
+      </div>
 
       <div className="wisp-scrollwrap">
       <div className="wisp-scroll" ref={scroller} onScroll={onScroll}>
