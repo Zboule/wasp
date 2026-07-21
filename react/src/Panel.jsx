@@ -159,14 +159,44 @@ function ToolChip({ item }) {
 
 export function Panel({ title = "Assistant", placeholder = "Ask the agent…", suggestions = [], uploadUrl, ...config }) {
   const wisp = useWisp(config);
-  const [text, setText] = useState("");
+  // Draft lives in sessionStorage so no remount/reload/late agent event can
+  // wipe half-typed text.
+  const draftKey = `wisp-draft:${config.sessionId || "default"}`;
+  const [text, setTextState] = useState(() => {
+    try {
+      return sessionStorage.getItem(draftKey) || "";
+    } catch {
+      return "";
+    }
+  });
+  const setText = (v) => {
+    setTextState(v);
+    try {
+      v ? sessionStorage.setItem(draftKey, v) : sessionStorage.removeItem(draftKey);
+    } catch {}
+  };
   const [pending, setPending] = useState([]); // uploaded, not yet sent
+  const [showJump, setShowJump] = useState(false);
+  const nearBottom = useRef(true);
   const fileRef = useRef(null);
   const scroller = useRef(null);
 
-  useEffect(() => {
+  const onScroll = () => {
     const el = scroller.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const away = el.scrollHeight - el.scrollTop - el.clientHeight;
+    nearBottom.current = away < 160;
+    setShowJump(away > 300);
+  };
+  const jumpDown = () => {
+    const el = scroller.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
+  useEffect(() => {
+    // follow the stream only while the user is already at the bottom —
+    // reading upthread must not be yanked away
+    const el = scroller.current;
+    if (el && nearBottom.current) el.scrollTop = el.scrollHeight;
   }, [wisp.timeline, wisp.pendingApproval, wisp.status]);
 
   async function onPick(e) {
@@ -213,7 +243,8 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
         <span className="wisp-title">{title}</span>
       </div>
 
-      <div className="wisp-scroll" ref={scroller}>
+      <div className="wisp-scrollwrap">
+      <div className="wisp-scroll" ref={scroller} onScroll={onScroll}>
         {empty && (
           <div className="wisp-empty">
             <div className="wisp-empty-em">✨</div>
@@ -295,6 +326,12 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
 
         {wisp.status === "error" && <div className="wisp-error">{wisp.error}</div>}
       </div>
+      {showJump && (
+        <button type="button" className="wisp-jump" onClick={jumpDown} aria-label="Scroll to latest">
+          ↓
+        </button>
+      )}
+      </div>
 
       {pending.length > 0 && (
         <div className="wisp-pending">
@@ -318,7 +355,7 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
             if (e.key === "Enter" && !e.shiftKey) submit(e);
           }}
         />
-        <div className="wisp-btncol">
+        <div className="wisp-input-row">
           {uploadUrl && (
             <>
               <button
@@ -327,15 +364,12 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
                 aria-label="Attach image"
                 onClick={() => fileRef.current?.click()}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="3" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="m21 15-5-5L5 21" />
-                </svg>
+                +
               </button>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={onPick} />
             </>
           )}
+          <span className="wisp-input-sp" />
           <button
             className={running ? "wisp-send stop" : "wisp-send"}
             type="submit"
