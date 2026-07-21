@@ -18,7 +18,7 @@
 /* header row in normal flow: survives every mobile browser's viewport games */
 .wisp { position: relative; }
 /* header in flow: the scroller (and its scrollbar) starts below it */
-.wisp-chrome { display: flex; align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 8px; flex-shrink: 0; background: rgb(255 255 255 / 0.08); }
+.wisp-chrome { display: flex; align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 8px; flex-shrink: 0; background: linear-gradient(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0)); }
 .wisp-back { width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.65); background: rgb(255 255 255 / 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 1px 8px rgb(0 0 0 / 0.08); color: var(--w-ink); display: block; cursor: pointer; padding: 0; line-height: 0; text-align: center; }
 .wisp-back svg { vertical-align: middle; }
 .wisp-back:active { transform: scale(0.94); }
