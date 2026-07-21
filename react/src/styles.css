@@ -17,15 +17,16 @@
 .wisp * { box-sizing: border-box; }
 /* header row in normal flow: survives every mobile browser's viewport games */
 .wisp { position: relative; }
-.wisp-chrome { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 8px; background: rgb(255 255 255 / 0.72); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); border-bottom: 1px solid rgb(0 0 0 / 0.05); }
-.wisp-back { width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.65); background: rgb(255 255 255 / 0.6); backdrop-filter: blur(14px) saturate(1.5); -webkit-backdrop-filter: blur(14px) saturate(1.5); box-shadow: 0 2px 12px rgb(0 0 0 / 0.12); color: var(--w-ink); display: block; cursor: pointer; padding: 0; line-height: 0; text-align: center; }
+/* header in flow: the scroller (and its scrollbar) starts below it */
+.wisp-chrome { display: flex; align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 8px; flex-shrink: 0; background: rgb(255 255 255 / 0.35); border-bottom: 1px solid rgb(0 0 0 / 0.04); }
+.wisp-back { width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.65); background: rgb(255 255 255 / 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 1px 8px rgb(0 0 0 / 0.08); color: var(--w-ink); display: block; cursor: pointer; padding: 0; line-height: 0; text-align: center; }
 .wisp-back svg { vertical-align: middle; }
 .wisp-back:active { transform: scale(0.94); }
 .wisp-chrome-title { flex: 1; text-align: center; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wisp-chrome-sp { width: 42px; flex-shrink: 0; }
 
 .wisp-scrollwrap { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
-.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: calc(78px + env(safe-area-inset-top)) 16px calc(156px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); display: flex; flex-direction: column; gap: 12px; }
+.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 12px 16px calc(156px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); display: flex; flex-direction: column; gap: 12px; }
 .wisp-jump { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); z-index: 4; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--w-line); background: var(--w-bg); color: var(--w-ink); font-size: 18px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.14); cursor: pointer; }
 
 .wisp-empty { margin: auto; text-align: center; color: var(--w-muted); }
