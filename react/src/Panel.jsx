@@ -187,25 +187,43 @@ export function Panel({ title = "Assistant", placeholder = "Ask the agent…", s
 
   const rootRef = useRef(null);
   useEffect(() => {
-    // iOS doesn't resize the layout viewport when the keyboard opens — track
-    // the visual viewport and push the floating composer up by the overlap.
+    // Keyboard compensation that works under BOTH iOS keyboard modes:
+    // classic (layout viewport untouched, visual viewport shrinks) and
+    // iOS 26 Chrome (layout viewport itself resizes, so innerHeight-based
+    // math reads 0). The overlap between the panel's own bottom edge and
+    // the visible bottom — both in layout coords — is correct in either.
     const vv = window.visualViewport;
-    if (!vv) return;
     const update = () => {
-      // Proven formula: keyboard overlap = layout height minus visible area.
-      // (A rect-based variant regressed on iOS 26 Chrome — the host app's
-      // self-heal already guarantees sane geometry, so keep this simple.)
-      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      rootRef.current?.style.setProperty("--wisp-kb", kb + "px");
+      const el = rootRef.current;
+      if (!el) return;
+      const visibleBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const kb = Math.max(0, Math.round(el.getBoundingClientRect().bottom - visibleBottom));
+      el.style.setProperty("--wisp-kb", kb + "px");
     };
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
+    // Neither event source alone is reliable across modes — listen to both,
+    // and sweep through the keyboard's show/hide animation on focus changes
+    // (some WebKit builds fire NO viewport event for the resize).
+    let sweep = [];
+    const onFocusChange = () => {
+      sweep.forEach(clearTimeout);
+      sweep = [60, 150, 300, 500, 800].map((t) => setTimeout(update, t));
+      update();
+    };
+    vv?.addEventListener("resize", update);
+    vv?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
     window.addEventListener("pageshow", update);
+    document.addEventListener("focusin", onFocusChange);
+    document.addEventListener("focusout", onFocusChange);
     update();
     return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
+      sweep.forEach(clearTimeout);
+      vv?.removeEventListener("resize", update);
+      vv?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
       window.removeEventListener("pageshow", update);
+      document.removeEventListener("focusin", onFocusChange);
+      document.removeEventListener("focusout", onFocusChange);
     };
   }, []);
 
