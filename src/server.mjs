@@ -14,6 +14,7 @@ import { agentConfig } from './config.mjs';
 import { runTurn } from './agent.mjs';
 import { loadSecrets } from './secrets.mjs';
 import { createPublisher } from './publish.mjs';
+import { writeTurnResult } from './sink-dynamo.mjs';
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = '0.0.0.0';
@@ -84,6 +85,9 @@ const server = createServer(async (req, res) => {
     // invoke-agent-runtime --runtime-user-id; fall back to the body.
     const userId = req.headers[USER_HEADER] || payload.userId || null;
     const runId = payload.runId || randomUUID();
+    // The consumer's logical thread key (book pid), distinct from the AgentCore
+    // session id used for affinity/resume.
+    const threadId = payload.threadId || sessionId;
     const resumeId = sdkSessionFor.get(sessionId) || null;
     const config = agentConfig(payload.config || {});
     // Clients that want a single JSON blob instead of the SSE stream ask for it.
@@ -97,23 +101,32 @@ const server = createServer(async (req, res) => {
       // (so AgentCore keeps the microVM busy) and run the turn to completion,
       // publishing each event via the callback. Ack immediately so the caller can
       // drop the connection; the run continues regardless (spike #1).
+      const agentTable = process.env.AGENT_TABLE;
       const callbackUrl = process.env.AGENT_EVENT_CALLBACK_URL;
-      if (callbackUrl) {
-        const pub = createPublisher({
-          url: callbackUrl,
-          secret: process.env.AGENT_EVENT_CALLBACK_SECRET,
-          threadId: sessionId, runId, userId, log,
-        });
+      if (agentTable || callbackUrl) {
+        // Ack immediately; the caller drops the connection and the run continues
+        // (spike #1). We keep the request open so AgentCore keeps the microVM busy.
+        // Ack and CLOSE the response immediately; the invoker can return now.
+        // We keep running the turn in the background: inFlight stays > 0, so
+        // /ping reports HealthyBusy and AgentCore keeps the microVM alive until
+        // the turn finishes (then it goes idle and is reclaimed).
         res.writeHead(202, { 'content-type': 'application/json' });
-        res.write(JSON.stringify({ accepted: true, sessionId, runId }));
+        res.end(JSON.stringify({ accepted: true, threadId, runId }));
+        const pub = callbackUrl && !agentTable
+          ? createPublisher({ url: callbackUrl, secret: process.env.AGENT_EVENT_CALLBACK_SECRET, threadId, runId, userId, log })
+          : null;
         try {
-          const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId, onEvent: (ev) => pub.emit(ev) });
+          const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId, onEvent: pub ? (ev) => pub.emit(ev) : undefined });
           if (out.sdkSessionId) sdkSessionFor.set(sessionId, out.sdkSessionId);
+          if (agentTable) {
+            await writeTurnResult({ table: agentTable, threadId, runId, userId, text: out.text, result: out.result });
+            log(`sink: wrote turn result to ${agentTable} (thread=${threadId.slice(0,8)} run=${runId.slice(0,8)})`);
+          }
         } catch (e) {
-          pub.emit({ type: 'error', error: String(e?.message || e) });
+          log(`publish-mode error: ${String(e?.message || e).slice(0,200)}`);
+          if (pub) pub.emit({ type: 'error', error: String(e?.message || e) });
         }
-        await pub.close();
-        try { res.end(); } catch {}
+        if (pub) await pub.close();
         return;
       }
 
