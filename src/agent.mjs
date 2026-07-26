@@ -56,8 +56,18 @@ function sessionEnv(sessionKey) {
 //                so the caller keeps a stable id and we map it to the SDK id.
 // `onEvent` receives {type,...} events for streaming.
 // Returns { sdkSessionId, text, toolUses, result }.
-export async function runTurn({ prompt, sessionKey, resumeId, config, userId, runId, onEvent }) {
+export async function runTurn({ prompt, sessionKey, resumeId, config, userId, runId, userToken, onEvent }) {
   const { cwd, env } = sessionEnv(sessionKey || 'default');
+
+  // Per-turn MCP: install the consumer's API as an http MCP server, carrying THIS
+  // turn's user token, so tool calls act as the sender of the current message.
+  const mcpUrl = process.env.AGENT_MCP_HTTP_URL;
+  const mcpServers = mcpUrl && userToken
+    ? { petitsonge: { type: 'http', url: mcpUrl, headers: { Authorization: `Bearer ${userToken}` } } }
+    : config.mcpServers;
+  const allowedTools = mcpUrl && userToken
+    ? [...(config.allowedTools || []), 'mcp__petitsonge']
+    : config.allowedTools;
 
   let sdkSessionId = resumeId || null;
   let text = '';
@@ -72,8 +82,9 @@ export async function runTurn({ prompt, sessionKey, resumeId, config, userId, ru
       maxTurns: config.maxTurns,
       ...(config.maxBudgetUsd ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
       ...(sessionStore ? { sessionStore } : {}),
-      ...(config.allowedTools ? { allowedTools: config.allowedTools } : {}),
-      ...(config.mcpServers ? { mcpServers: config.mcpServers } : {}),
+      ...(allowedTools ? { allowedTools } : {}),
+      ...(mcpServers ? { mcpServers } : {}),
+      ...(mcpUrl && userToken ? { permissionMode: 'bypassPermissions' } : {}),
       // Isolation (hosting doc, "Multi-tenant isolation"): don't inherit the
       // container's dev-facing CLAUDE.md / user settings; give each session its
       // own working dir; never auto-load memory.

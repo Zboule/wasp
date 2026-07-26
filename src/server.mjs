@@ -88,6 +88,9 @@ const server = createServer(async (req, res) => {
     // The consumer's logical thread key (book pid), distinct from the AgentCore
     // session id used for affinity/resume.
     const threadId = payload.threadId || sessionId;
+    // The sender's short-lived token, used ONLY as the per-turn MCP auth header.
+    // Never logged, never persisted, never put in the prompt/transcript.
+    const userToken = payload.userToken || null;
     const resumeId = sdkSessionFor.get(sessionId) || null;
     const config = agentConfig(payload.config || {});
     // Clients that want a single JSON blob instead of the SSE stream ask for it.
@@ -116,7 +119,7 @@ const server = createServer(async (req, res) => {
           ? createPublisher({ url: callbackUrl, secret: process.env.AGENT_EVENT_CALLBACK_SECRET, threadId, runId, userId, log })
           : null;
         try {
-          const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId, onEvent: pub ? (ev) => pub.emit(ev) : undefined });
+          const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId, userToken, onEvent: pub ? (ev) => pub.emit(ev) : undefined });
           if (out.sdkSessionId) sdkSessionFor.set(sessionId, out.sdkSessionId);
           if (agentTable) {
             await writeTurnResult({ table: agentTable, threadId, runId, userId, text: out.text, result: out.result });
