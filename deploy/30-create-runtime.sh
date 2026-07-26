@@ -11,7 +11,13 @@ CONTAINER_URI="${ECR_URI}:${IMAGE_TAG}"
 ARTIFACT="{\"containerConfiguration\":{\"containerUri\":\"$CONTAINER_URI\"}}"
 NETWORK='{"networkMode":"PUBLIC"}'
 PROTOCOL='{"serverProtocol":"HTTP"}'
-ENVVARS="{\"AGENT_AUTH_MODE\":\"$AGENT_AUTH_MODE\",\"AGENT_MODEL\":\"$AGENT_MODEL\",\"AGENT_SECRET_SSM_PARAM\":\"$AGENT_SECRET_SSM_PARAM\",\"AWS_REGION\":\"$AWS_REGION\",\"AGENT_CONFIG_FILE\":\"/app/agent.config.json\"}"
+ENVVARS=$(python3 -c 'import json,os
+b={"AGENT_AUTH_MODE":os.environ["AGENT_AUTH_MODE"],"AGENT_MODEL":os.environ["AGENT_MODEL"],"AGENT_SECRET_SSM_PARAM":os.environ["AGENT_SECRET_SSM_PARAM"],"AWS_REGION":os.environ["AWS_REGION"],"AGENT_CONFIG_FILE":"/app/agent.config.json"}
+import os as _o
+for k in ["AGENT_SESSIONSTORE_S3_BUCKET","AGENT_SESSIONSTORE_S3_PREFIX","AGENT_EVENT_CALLBACK_URL","AGENT_EVENT_CALLBACK_SECRET"]:
+  v=_o.environ.get(k)
+  if v: b[k]=v
+print(json.dumps(b))')
 
 EXISTING=$(aws bedrock-agentcore-control list-agent-runtimes \
   --query "agentRuntimes[?agentRuntimeName=='$RUNTIME_NAME'].agentRuntimeId | [0]" --output text 2>/dev/null || echo None)
