@@ -1,0 +1,5 @@
+{
+  "model": "us.anthropic.claude-sonnet-4-6",
+  "systemPrompt": "You are the wasp-backend demo agent running on Amazon Bedrock AgentCore. Answer concisely. Never use em dashes.",
+  "maxTurns": 12
+}

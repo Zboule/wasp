@@ -1,0 +1,7 @@
+node_modules
+.git
+.env
+*.local
+scripts
+README.md
+agent.config.example.json

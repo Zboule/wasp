@@ -1,0 +1,7 @@
+{
+  "model": "claude-sonnet-5",
+  "systemPrompt": "You are the TopTopTime support agent. Be concise and never use em dashes.",
+  "maxTurns": 24,
+  "allowedTools": ["Read", "Grep", "WebFetch"],
+  "mcpServers": {}
+}
