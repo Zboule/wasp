@@ -7,6 +7,7 @@
 // pattern from the hosting doc and is left as a wiring point (see README).
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { createS3SessionStore } from './session-store.mjs';
 import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -14,6 +15,17 @@ import path from 'node:path';
 // Per-session working directory. Defaults suit the container (/work); override
 // with AGENT_WORK_DIR when running outside one.
 const WORK_BASE = process.env.AGENT_WORK_DIR || '/work';
+
+// Optional S3 SessionStore so a thread's model context survives microVM
+// recycling. Created once if a bucket is configured.
+const sessionStore = process.env.AGENT_SESSIONSTORE_S3_BUCKET
+  ? createS3SessionStore({
+      bucket: process.env.AGENT_SESSIONSTORE_S3_BUCKET,
+      prefix: process.env.AGENT_SESSIONSTORE_S3_PREFIX || 'sessions',
+      region: process.env.AWS_REGION || 'eu-west-1',
+      log: (m) => console.log(`${new Date().toISOString().slice(11,19)}  ${m}`),
+    })
+  : undefined;
 
 // Per-session CONFIG-dir isolation is only needed when many tenants share ONE
 // container. Under AgentCore each session already gets its own microVM, so it's
@@ -44,7 +56,7 @@ function sessionEnv(sessionKey) {
 //                so the caller keeps a stable id and we map it to the SDK id.
 // `onEvent` receives {type,...} events for streaming.
 // Returns { sdkSessionId, text, toolUses, result }.
-export async function runTurn({ prompt, sessionKey, resumeId, config, onEvent }) {
+export async function runTurn({ prompt, sessionKey, resumeId, config, userId, runId, onEvent }) {
   const { cwd, env } = sessionEnv(sessionKey || 'default');
 
   let sdkSessionId = resumeId || null;
@@ -58,6 +70,8 @@ export async function runTurn({ prompt, sessionKey, resumeId, config, onEvent })
       model: config.model,
       systemPrompt: config.systemPrompt,
       maxTurns: config.maxTurns,
+      ...(config.maxBudgetUsd ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
+      ...(sessionStore ? { sessionStore } : {}),
       ...(config.allowedTools ? { allowedTools: config.allowedTools } : {}),
       ...(config.mcpServers ? { mcpServers: config.mcpServers } : {}),
       // Isolation (hosting doc, "Multi-tenant isolation"): don't inherit the
@@ -84,7 +98,7 @@ export async function runTurn({ prompt, sessionKey, resumeId, config, onEvent })
         }
       }
     } else if (m.type === 'result') {
-      result = { subtype: m.subtype, usage: m.usage, total_cost_usd: m.total_cost_usd };
+      result = { subtype: m.subtype, usage: m.usage, total_cost_usd: m.total_cost_usd, userId, runId };
       onEvent?.({ type: 'result', result });
     }
   }

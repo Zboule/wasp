@@ -20,6 +20,8 @@ const DEFAULTS = {
   // Bound each turn so a runaway agent can't loop forever (there is no built-in
   // wall-clock session timeout — see the hosting doc's "known limitations").
   maxTurns: 24,
+  // Spend guard: the SDK stops with error_max_budget_usd past this.
+  maxBudgetUsd: 2.0,
 };
 
 function fromFile() {
@@ -37,6 +39,7 @@ function fromEnv() {
   if (process.env.AGENT_MODEL) out.model = process.env.AGENT_MODEL;
   if (process.env.AGENT_SYSTEM_PROMPT) out.systemPrompt = process.env.AGENT_SYSTEM_PROMPT;
   if (process.env.AGENT_MAX_TURNS) out.maxTurns = Number(process.env.AGENT_MAX_TURNS);
+  if (process.env.AGENT_MAX_BUDGET_USD) out.maxBudgetUsd = Number(process.env.AGENT_MAX_BUDGET_USD);
   if (process.env.AGENT_ALLOWED_TOOLS) out.allowedTools = process.env.AGENT_ALLOWED_TOOLS.split(',').map((s) => s.trim());
   return out;
 }

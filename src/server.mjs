@@ -13,10 +13,12 @@ import { resolveAuth } from './auth.mjs';
 import { agentConfig } from './config.mjs';
 import { runTurn } from './agent.mjs';
 import { loadSecrets } from './secrets.mjs';
+import { createPublisher } from './publish.mjs';
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = '0.0.0.0';
 const SESSION_HEADER = 'x-amzn-bedrock-agentcore-runtime-session-id';
+const USER_HEADER = 'x-amzn-bedrock-agentcore-runtime-user-id';
 
 const stamp = () => new Date().toISOString().slice(11, 19);
 const log = (msg) => console.log(`${stamp()}  ${msg}`);
@@ -78,19 +80,48 @@ const server = createServer(async (req, res) => {
     // Stable per-conversation id: AgentCore's header, else a caller-supplied id,
     // else a fresh one we mint and hand back so the client can continue.
     const sessionId = req.headers[SESSION_HEADER] || payload.sessionId || randomUUID();
+    // Per-user attribution: AgentCore sets the user-id header from
+    // invoke-agent-runtime --runtime-user-id; fall back to the body.
+    const userId = req.headers[USER_HEADER] || payload.userId || null;
+    const runId = payload.runId || randomUUID();
     const resumeId = sdkSessionFor.get(sessionId) || null;
     const config = agentConfig(payload.config || {});
     // Clients that want a single JSON blob instead of the SSE stream ask for it.
     const wantsJson = (req.headers.accept || '').includes('application/json') || /(?:\?|&)format=json/.test(req.url);
 
-    log(`invoke: session=${sessionId.slice(0, 8)} ${resumeId ? 'resume' : 'new'} model=${config.model} ${wantsJson ? '[json]' : '[sse]'}`);
+    log(`invoke: session=${sessionId.slice(0, 8)} run=${runId.slice(0, 8)} user=${userId || '-'} ${resumeId ? 'resume' : 'new'} model=${config.model}`);
 
     try {
+      // Publish mode (Petit Songe): deliver events out-of-band to the consumer's
+      // ingest endpoint. The invoker fires-and-forgets; we keep the request open
+      // (so AgentCore keeps the microVM busy) and run the turn to completion,
+      // publishing each event via the callback. Ack immediately so the caller can
+      // drop the connection; the run continues regardless (spike #1).
+      const callbackUrl = process.env.AGENT_EVENT_CALLBACK_URL;
+      if (callbackUrl) {
+        const pub = createPublisher({
+          url: callbackUrl,
+          secret: process.env.AGENT_EVENT_CALLBACK_SECRET,
+          threadId: sessionId, runId, userId, log,
+        });
+        res.writeHead(202, { 'content-type': 'application/json' });
+        res.write(JSON.stringify({ accepted: true, sessionId, runId }));
+        try {
+          const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId, onEvent: (ev) => pub.emit(ev) });
+          if (out.sdkSessionId) sdkSessionFor.set(sessionId, out.sdkSessionId);
+        } catch (e) {
+          pub.emit({ type: 'error', error: String(e?.message || e) });
+        }
+        await pub.close();
+        try { res.end(); } catch {}
+        return;
+      }
+
       if (wantsJson) {
-        const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config });
+        const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId });
         if (out.sdkSessionId) sdkSessionFor.set(sessionId, out.sdkSessionId);
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ sessionId, text: out.text, toolUses: out.toolUses, result: out.result }));
+        res.end(JSON.stringify({ sessionId, runId, userId, text: out.text, toolUses: out.toolUses, result: out.result }));
       } else {
         res.writeHead(200, {
           'content-type': 'text/event-stream',
@@ -99,9 +130,9 @@ const server = createServer(async (req, res) => {
         });
         const send = (ev) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
         send({ type: 'session', sessionId });
-        const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, onEvent: send });
+        const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId, onEvent: send });
         if (out.sdkSessionId) sdkSessionFor.set(sessionId, out.sdkSessionId);
-        send({ type: 'done', sessionId, result: out.result });
+        send({ type: 'done', sessionId, runId, userId, result: out.result });
         res.end();
       }
     } catch (e) {
