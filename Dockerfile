@@ -6,7 +6,10 @@ FROM --platform=linux/arm64 node:22-slim
 # The Agent SDK bundles a native `claude` CLI binary for the host platform, so
 # no separate Claude Code install is needed. It does shell out, so keep a shell
 # and CA certs (outbound HTTPS to api.anthropic.com).
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git \
+# curl is here for the agent, not the runtime: a service that hands the agent
+# presigned URLs for a user's uploads needs SOME way to pull them into the
+# working directory before Read or a script can touch them.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root. The CLI writes cache/config under HOME, so give it a writable home.

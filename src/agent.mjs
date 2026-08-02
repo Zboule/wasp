@@ -61,12 +61,25 @@ export async function runTurn({ prompt, sessionKey, resumeId, config, userId, ru
 
   // Per-turn MCP: install the consumer's API as an http MCP server, carrying THIS
   // turn's user token, so tool calls act as the sender of the current message.
+  //
+  // The server's NAME is per-service, because it becomes the prefix the model
+  // sees on every tool (`mcp__<name>__get_tree`). It was hardcoded to
+  // `petitsonge`, which is right for one consumer and wrong for a reusable
+  // engine: the second service would show its own tools under another
+  // product's name. AGENT_MCP_NAME sets it. Petit Songe pins its image by
+  // digest, so this cannot move under it, but it must set
+  // AGENT_MCP_NAME=petitsonge if it ever rebuilds from this commit.
   const mcpUrl = process.env.AGENT_MCP_HTTP_URL;
+  const mcpName = (process.env.AGENT_MCP_NAME || 'api').replace(/[^A-Za-z0-9_]/g, '') || 'api';
   const mcpServers = mcpUrl && userToken
-    ? { petitsonge: { type: 'http', url: mcpUrl, headers: { Authorization: `Bearer ${userToken}` } } }
+    ? { [mcpName]: { type: 'http', url: mcpUrl, headers: { Authorization: `Bearer ${userToken}` } } }
     : config.mcpServers;
+  // `allowedTools` REPLACES the SDK's default set rather than adding to it, so a
+  // service that wants the file and shell tools has to name them in its own
+  // config: appending only the MCP entry would silently take Read, Write and
+  // Bash away from an agent that had them by default.
   const allowedTools = mcpUrl && userToken
-    ? [...(config.allowedTools || []), 'mcp__petitsonge']
+    ? [...(config.allowedTools || []), `mcp__${mcpName}`]
     : config.allowedTools;
 
   let sdkSessionId = resumeId || null;
