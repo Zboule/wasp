@@ -73,20 +73,36 @@ cold-start latency and the session-resume verification from the live runtime.
 
 ## Sessions & persistence
 
-Within a session AgentCore keeps the same microVM, so we hold the caller-id ->
-SDK-session-id map in memory and `resume` the SDK session each turn (two distinct
-ids: the caller's stable id keys the working dir where transcripts live; the SDK
-mints its own id for `resume`). Across a microVM restart that map and the
-transcript are gone; for conversations that must survive that, attach a
+AgentCore routes same-session requests to the same microVM but does not KEEP
+that microVM: once a turn goes idle it is reclaimed, and the next message on the
+conversation arrives somewhere else. So nothing about a thread may live in the
+process.
+
+The SDK session id is therefore **derived, not remembered**: `sessionUuidFor()`
+in `src/server.mjs` hashes the caller's stable session id into a UUIDv5, and
+`options.sessionId` pins the SDK to it. With a
 [`SessionStore`](https://code.claude.com/docs/en/agent-sdk/session-storage)
-adapter (S3/Redis/Postgres) at the `sdkSessionFor` map in `src/server.mjs`.
+attached (`AGENT_SESSIONSTORE_S3_BUCKET`), the transcript is written and read
+back at that same key on any microVM, for ever.
+
+Each turn tries `resume` first and falls back to creating the session under the
+pinned id. Resuming a session that does not exist fails *before* the `init`
+message, so the fallback cannot repeat a side effect: no init means no model
+call and no tool ran. A conversation's first turn pays one extra spawn, which
+fails in about a second.
+
+This replaced an in-memory `caller-id -> SDK-session-id` map, which lost the
+thread on every microVM recycle. It failed silently — history was mirrored
+faithfully to a key the next turn never looked at — so it read as an assistant
+with no memory rather than as an error.
 
 ## Files
 
 | Path | Role |
 |---|---|
-| `src/server.mjs` | AgentCore contract (`/ping`, `/invocations`), caller->SDK session map |
-| `src/agent.mjs` | one Agent SDK turn per call, resume, isolation |
+| `src/server.mjs` | AgentCore contract (`/ping`, `/invocations`), derived session id |
+| `src/agent.mjs` | one Agent SDK turn per call, resume-or-create, isolation |
+| `src/session-store.mjs` | S3 `SessionStore` adapter, so a thread outlives its microVM |
 | `src/auth.mjs` | resolves `max` / `apikey` / `bedrock`, fixes env precedence |
 | `src/config.mjs` | per-service agent config resolution |
 | `Dockerfile` | ARM64 image |

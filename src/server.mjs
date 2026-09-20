@@ -8,7 +8,7 @@
 // The same server runs anywhere a container runs — AgentCore is just one host.
 
 import { createServer } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { resolveAuth } from './auth.mjs';
 import { agentConfig } from './config.mjs';
 import { runTurn } from './agent.mjs';
@@ -36,11 +36,29 @@ log(`auth: mode=${auth.mode} — ${auth.billing}`);
 
 let inFlight = 0;
 
-// Stable caller session id -> the SDK's own session id, so follow-up turns can
-// `resume` the thread. In-memory is correct for the AgentCore model (one
-// microVM per session). To survive a microVM restart, back this with a
-// SessionStore adapter (S3/Redis/Postgres) — see README, "Persistence".
-const sdkSessionFor = new Map();
+// The SDK session id for a conversation, DERIVED rather than remembered.
+//
+// This used to be an in-memory Map from the caller's stable session id to the
+// SDK session id minted on the first turn. That is wrong on AgentCore, and
+// quietly so: the microVM is reclaimed once a turn goes idle, so the next
+// message arrives with the map empty, the SDK mints a fresh id, and the S3
+// SessionStore — keyed by the SDK's id — writes a brand new transcript. Nothing
+// errored. The history was saved faithfully, to a key nobody would ever read
+// again, and the assistant met every second message as a stranger.
+//
+// A derived id has no such gap: the same conversation resolves to the same UUID
+// on any microVM, for ever, with nothing held anywhere. UUIDv5 over the caller's
+// session id (RFC 4122 §4.3, SHA-1, name-based), because `options.sessionId`
+// requires a well-formed UUID.
+const UUID_NAMESPACE = Buffer.from('6ba7b8119dad11d180b400c04fd430c8', 'hex'); // RFC 4122 DNS namespace
+
+function sessionUuidFor(name) {
+  const h = createHash('sha1').update(UUID_NAMESPACE).update(name, 'utf8').digest();
+  h[6] = (h[6] & 0x0f) | 0x50; // version 5
+  h[8] = (h[8] & 0x3f) | 0x80; // RFC 4122 variant
+  const x = h.subarray(0, 16).toString('hex');
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20, 32)}`;
+}
 
 const readBody = (req) =>
   new Promise((resolve, reject) => {
@@ -91,12 +109,14 @@ const server = createServer(async (req, res) => {
     // The sender's short-lived token, used ONLY as the per-turn MCP auth header.
     // Never logged, never persisted, never put in the prompt/transcript.
     const userToken = payload.userToken || null;
-    const resumeId = sdkSessionFor.get(sessionId) || null;
+    // Keyed on the AgentCore session id, not threadId: it is the id that already
+    // keys the working directory, and the store's project key comes from there.
+    const threadSessionId = sessionUuidFor(sessionId);
     const config = agentConfig(payload.config || {});
     // Clients that want a single JSON blob instead of the SSE stream ask for it.
     const wantsJson = (req.headers.accept || '').includes('application/json') || /(?:\?|&)format=json/.test(req.url);
 
-    log(`invoke: session=${sessionId.slice(0, 8)} run=${runId.slice(0, 8)} user=${userId || '-'} ${resumeId ? 'resume' : 'new'} model=${config.model}`);
+    log(`invoke: session=${sessionId.slice(0, 8)} run=${runId.slice(0, 8)} user=${userId || '-'} model=${config.model}`);
 
     try {
       // Publish mode (Petit Songe): deliver events out-of-band to the consumer's
@@ -119,8 +139,7 @@ const server = createServer(async (req, res) => {
           ? createPublisher({ url: callbackUrl, secret: process.env.AGENT_EVENT_CALLBACK_SECRET, threadId, runId, userId, log })
           : null;
         try {
-          const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId, userToken, onEvent: pub ? (ev) => pub.emit(ev) : undefined });
-          if (out.sdkSessionId) sdkSessionFor.set(sessionId, out.sdkSessionId);
+          const out = await runTurn({ prompt, sessionKey: sessionId, threadSessionId, config, userId, runId, userToken, onEvent: pub ? (ev) => pub.emit(ev) : undefined });
           if (agentTable) {
             await writeTurnResult({ table: agentTable, threadId, runId, userId, text: out.text, result: out.result });
             log(`sink: wrote turn result to ${agentTable} (thread=${threadId.slice(0,8)} run=${runId.slice(0,8)})`);
@@ -134,8 +153,7 @@ const server = createServer(async (req, res) => {
       }
 
       if (wantsJson) {
-        const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId });
-        if (out.sdkSessionId) sdkSessionFor.set(sessionId, out.sdkSessionId);
+        const out = await runTurn({ prompt, sessionKey: sessionId, threadSessionId, config, userId, runId });
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ sessionId, runId, userId, text: out.text, toolUses: out.toolUses, result: out.result }));
       } else {
@@ -146,8 +164,7 @@ const server = createServer(async (req, res) => {
         });
         const send = (ev) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
         send({ type: 'session', sessionId });
-        const out = await runTurn({ prompt, sessionKey: sessionId, resumeId, config, userId, runId, onEvent: send });
-        if (out.sdkSessionId) sdkSessionFor.set(sessionId, out.sdkSessionId);
+        const out = await runTurn({ prompt, sessionKey: sessionId, threadSessionId, config, userId, runId, onEvent: send });
         send({ type: 'done', sessionId, runId, userId, result: out.result });
         res.end();
       }
