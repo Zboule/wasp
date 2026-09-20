@@ -28,24 +28,35 @@ async function pumpSSE(res, onEvent, signal) {
   }
 }
 
-export function createWispClient({ endpoint = "", app, sessionId, historyUrl, onAppState, onError } = {}) {
+// `credentials` is passed through to every fetch. It stays undefined (i.e. the
+// browser default, same-origin) unless a host asks for it, so same-origin
+// embeds are unaffected — but a panel talking to another origin behind a shared
+// SSO cookie needs "include" on ALL THREE calls below, not just the run: the
+// history ones would otherwise fail silently and hydrate an empty thread.
+export function createWispClient({ endpoint = "", app, sessionId, historyUrl, credentials, onAppState, onError } = {}) {
   const store = createChatStore();
   let controller = null;
 
   // Restore a persisted conversation (if the host app provides one). Only text
   // turns are restored; tool chips belong to the live run that produced them.
+  // Spread the stored message first so any extra fields the host put on it
+  // (provenance, timestamps, …) survive into the timeline; kind/id/text win.
+  const toTimeline = (messages) =>
+    messages.map((m) => ({
+      ...m,
+      kind: m.role === "user" ? "user" : "assistant",
+      id: uid(),
+      text: m.text || "",
+      attachments: [],
+    }));
+
   if (historyUrl) {
-    fetch(historyUrl)
+    fetch(historyUrl, { credentials })
       .then((r) => (r.ok ? r.json() : null))
       .then((h) => {
         if (!h?.messages?.length) return;
         if (store.getState().timeline.length) return; // don't clobber a live conversation
-        const timeline = h.messages.map((m) => ({
-          kind: m.role === "user" ? "user" : "assistant",
-          id: uid(),
-          text: m.text || "",
-        }));
-        store.getState().dispatch({ type: LOCAL.HYDRATE, timeline });
+        store.getState().dispatch({ type: LOCAL.HYDRATE, timeline: toTimeline(h.messages) });
       })
       .catch(() => {});
   }
@@ -53,20 +64,14 @@ export function createWispClient({ endpoint = "", app, sessionId, historyUrl, on
   async function fetchHistory() {
     if (!historyUrl) return null;
     try {
-      const r = await fetch(historyUrl);
+      const r = await fetch(historyUrl, { credentials });
       return r.ok ? await r.json() : null;
     } catch {
       return null;
     }
   }
   function hydrateFrom(h) {
-    const timeline = h.messages.map((m) => ({
-      kind: m.role === "user" ? "user" : "assistant",
-      id: uid(),
-      text: m.text || "",
-      attachments: [],
-    }));
-    store.getState().dispatch({ type: LOCAL.HYDRATE, timeline });
+    store.getState().dispatch({ type: LOCAL.HYDRATE, timeline: toTimeline(h.messages) });
   }
 
   // The connection died mid-run (phone backgrounded, network blip) but the
@@ -99,9 +104,18 @@ export function createWispClient({ endpoint = "", app, sessionId, historyUrl, on
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, ...body }),
+        credentials,
         signal: controller.signal,
       });
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+      // A refused run (e.g. the agent is busy) carries a reason worth showing.
+      // Without this the catch below only ever sees "HTTP 409".
+      if (!res.ok) {
+        const reason = await res.json().catch(() => null);
+        const err = new Error(reason?.error || `HTTP ${res.status}`);
+        err.refused = true; // the run never started — nothing to recover
+        throw err;
+      }
+      if (!res.body) throw new Error(`HTTP ${res.status}`);
       await pumpSSE(
         res,
         (ev) => {
@@ -123,7 +137,7 @@ export function createWispClient({ endpoint = "", app, sessionId, historyUrl, on
     } catch (e) {
       if (e.name === "AbortError") {
         store.getState().dispatch({ type: EV.RUN_FINISHED });
-      } else if (historyUrl) {
+      } else if (historyUrl && !e.refused) {
         await recoverViaHistory(); // agent keeps working server-side
       } else {
         store.getState().dispatch({ type: EV.RUN_ERROR, message: e.message });
