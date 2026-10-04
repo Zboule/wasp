@@ -31,14 +31,15 @@ export function createWaspClient(resource: WaspResource, options: { limits?: Par
       );
       return Buffer.from(out.CiphertextBlob!).toString('base64');
     },
-    presign: (ref, { download } = {}) =>
+    presign: (ref, { download, asText } = {}) =>
       getSignedUrl(
         s3,
         new GetObjectCommand({
           Bucket: resource.bucketName,
           Key: ref,
           // A user's file is never rendered on the bucket's origin: an uploaded .html would otherwise run there.
-          ...(download ? { ResponseContentDisposition: contentDisposition(download) } : {})
+          ...(download ? { ResponseContentDisposition: contentDisposition(download) } : {}),
+          ...(asText ? { ResponseContentType: 'text/plain; charset=utf-8' } : {})
         }),
         { expiresIn: 900 }
       ),

@@ -26,6 +26,8 @@ export type ThreadRuntime = {
 
 /** Ask for fresh credentials this long before the current ones expire (they last at most an hour). */
 const REFRESH_BEFORE_MS = 10 * 60_000;
+/** Ask again this often until they arrive: a request can fail, or the waker can fail to answer it. */
+const REFRESH_RETRY_MS = 60_000;
 
 export type RunnerServerDeps = {
   /** Builds the store and agent for one thread. `credentials()` always returns the latest refreshed set. */
@@ -33,6 +35,7 @@ export type RunnerServerDeps = {
   owner: string;
   pollMs?: number;
   log?: (message: string) => void;
+  now?: () => number;
 };
 
 const SESSION_HEADER = 'x-amzn-bedrock-agentcore-runtime-session-id';
@@ -47,6 +50,7 @@ const SESSION_HEADER = 'x-amzn-bedrock-agentcore-runtime-session-id';
  */
 export function createRunnerServer(deps: RunnerServerDeps) {
   const log = deps.log ?? ((message: string) => console.log(`${new Date().toISOString()} ${message}`));
+  const now = deps.now ?? Date.now;
   let boundThread: string | null = null;
   let credentials: ThreadCredentials | null = null;
   let draining: Promise<unknown> | null = null;
@@ -78,15 +82,25 @@ export function createRunnerServer(deps: RunnerServerDeps) {
     boundThread = threadId;
     credentials = invocation.credentials;
 
-    if (invocation.op === 'refresh') return json(res, 200, { refreshed: true });
+    if (invocation.op === 'refresh') {
+      log(`refresh ${threadId}: credentials until ${credentials.expiration}`);
+      return json(res, 200, { refreshed: true });
+    }
     if (!draining) {
       const runtime = deps.forThread(threadId, () => credentials!, invocation.claude);
-      let requestedFor: string | null = null;
+      let requestedAt: number | null = null;
       const onTick = async () => {
-        const expiry = credentials!.expiration;
-        if (requestedFor === expiry || Date.parse(expiry) - Date.now() > REFRESH_BEFORE_MS) return;
-        requestedFor = expiry;
-        await runtime.store.requestCredentials(threadId, Date.now());
+        const at = now();
+        if (Date.parse(credentials!.expiration) - at > REFRESH_BEFORE_MS) return;
+        if (requestedAt !== null && at - requestedAt < REFRESH_RETRY_MS) return;
+        requestedAt = at;
+        // Caught here: a throw would skip this tick's lease renewal, and the drain loop drops tick errors silently.
+        try {
+          await runtime.store.requestCredentials(threadId, at);
+          log(`refresh ${threadId}: requested, credentials expire ${credentials!.expiration}`);
+        } catch (error) {
+          log(`refresh ${threadId}: request failed, retrying in a minute: ${error instanceof Error ? error.message : String(error)}`);
+        }
       };
       draining = drain(threadId, { ...runtime, owner: deps.owner, onTick, ...(deps.pollMs ? { pollMs: deps.pollMs } : {}) })
         .then((outcome) => log(`drain ${threadId}: ${outcome}`))

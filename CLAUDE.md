@@ -41,11 +41,14 @@ that only works if the agent behaves is not secure.
    transcript), leak its own thread's data, read its own user's caller token, and
    read the Claude credential. Prefer an API key with a spend limit, or Bedrock
    mode, over a long-lived subscription token.
-8. **The escape test must stay green.** The E2E suite asks the demo agent to read
-   or write another thread, decrypt another thread's token, and use the
-   runtime's own role, and asserts every attempt is denied. Any change to IAM,
-   storage keys, credentials or the runner/agent boundary keeps it passing and
-   updates `docs/security-model.md` in the same change.
+8. **The boundary tests must stay green.** Today that is one unit test: the
+   exact session policy (`packages/infra/src/waker/waker.test.ts`). The E2E
+   escape test (the agent tries to read or write another thread, decrypt another
+   thread's token, and use the runtime's own role, and every attempt must be
+   denied) is **not built yet**: don't assume it covers you. Until it exists,
+   verify a boundary change by hand against a deployed stack and say how. Any
+   change to IAM, storage keys, credentials or the runner/agent boundary keeps
+   these tests passing and updates `docs/security-model.md` in the same change.
 
 ## Conventions
 

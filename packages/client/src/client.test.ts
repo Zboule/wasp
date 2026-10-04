@@ -13,7 +13,7 @@ function setup() {
     store,
     now: () => clock,
     encryptToken: async (threadId, token) => `enc(${threadId}:${token})`,
-    presign: async (ref, { download } = {}) => `https://signed.example/${ref}${download ? `?as=${download}` : ''}`,
+    presign: async (ref, { download, asText } = {}) => `https://signed.example/${ref}${download ? `?as=${download}` : ''}${asText ? '?text' : ''}`,
     presignUpload: async (ref, { mediaType, size }) => ({ url: 'https://bucket.example/', fields: { key: ref, 'Content-Type': mediaType, size: String(size) } }),
     headObject: async (ref) => objects.get(ref) ?? null,
     deleteObjects: async (threadId) => void deleted.push(threadId),
@@ -62,13 +62,18 @@ describe('wasp client', () => {
     const first = await client.feed(thread);
     await store.append(
       thread,
-      [{ type: 'TOOL_CALL_RESULT', messageId: 'm', toolCallId: 't', content: 'preview…', outputRef: `payloads/${thread}/x.txt` }],
+      [
+        { type: 'TOOL_CALL_RESULT', messageId: 'm', toolCallId: 't', content: 'preview…', outputRef: `payloads/${thread}/x.txt` },
+        { type: 'TOOL_CALL_ARGS', toolCallId: 't', delta: '…', argsRef: `payloads/${thread}/y.txt` }
+      ],
       2
     );
 
+    // Served as text: the agent writes these objects, with whatever content type it likes.
     const next = await client.feed(thread, { after: first.cursor });
     expect(next.entries.map((e) => e.event)).toEqual([
-      expect.objectContaining({ outputRef: `https://signed.example/payloads/${thread}/x.txt` })
+      expect.objectContaining({ outputRef: `https://signed.example/payloads/${thread}/x.txt?text` }),
+      expect.objectContaining({ argsRef: `https://signed.example/payloads/${thread}/y.txt?text` })
     ]);
     expect((await client.feed(thread, { after: next.cursor })).cursor).toBe(next.cursor);
   });
