@@ -3,3 +3,8 @@ packages:
   - 'apps/*'
 allowBuilds:
   esbuild: true
+  # Type-only dev dependencies of the infra package: at deploy time SST's own
+  # Pulumi providers run, so their plugin downloads are never needed here.
+  '@pulumi/aws-native': false
+  '@pulumi/docker-build': false
+  protobufjs: false
