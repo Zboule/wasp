@@ -7,9 +7,11 @@ export type StoredMessage = QueuedMessage & {
   order: string;
   /** The caller's token, encrypted by the client; only the runner can decrypt it. */
   callerToken?: string;
+  /** Who `callerToken` speaks for (an opaque id from the app). A turn only takes in messages of its own principal. */
+  principal?: string;
 };
 
-export type NewMessage = QueuedMessage & { callerToken?: string };
+export type NewMessage = QueuedMessage & { callerToken?: string; principal?: string };
 
 export type CancelResult = 'cancelled' | 'delivered' | 'missing';
 

@@ -40,7 +40,7 @@ ever holds credentials scoped to its own thread.
 | Runtime execution role (ambient in the microVM) | ECR pull, CloudWatch logs. **No data.** | IAM |
 | Thread role session policy | DynamoDB `LeadingKeys = T#<threadId>`; S3 `sessions/<threadId>/*`, `payloads/<threadId>/*`; KMS decrypt with `kms:EncryptionContext:threadId = <threadId>` | IAM / STS session policy |
 | Credential lifetime | ≤ 1 hour (role chaining). The runner asks for a refresh from 10 minutes before expiry, again every minute until it arrives; the waker answers with a second invoke to the same session. | STS |
-| Caller tokens | encrypted by the client with context `{ threadId }`, decryptable only through the thread role | KMS |
+| Caller tokens | encrypted by the client with context `{ threadId }`, decryptable only through the thread role; decrypted just before a message is claimed, kept in memory as the running turn's MCP credential (a localhost proxy adds it to the app's MCP calls), cleared by a message without one. A token that can't be decrypted, or a JWT past its `exp`, fails the message (`wasp.message_failed`) instead of reaching the agent. | KMS, the runner |
 | App data | only through the app's MCP server with the caller's token | the app |
 | User files | uploaded by the browser with a presigned POST for one key, `payloads/<threadId>/files/<fileId>/<name>`, signed by the app's role (`s3:PutObject` on `payloads/*/files/*` only). Inside the thread's own prefix, so the session policy is unchanged. Downloads are presigned with `Content-Disposition: attachment`, so an uploaded page never runs on the bucket's origin. | IAM, S3 POST policy |
 | Tool payloads (`outputRef`, `argsRef`) | written by the agent under `payloads/<threadId>/`, with any content type it chooses. Presigned with `Content-Type: text/plain; charset=utf-8`, so they open as text in a tab and an agent-written page never runs on the bucket's origin. | the client's presign |
@@ -70,7 +70,7 @@ These are **not** bugs. A compromised agent is the owner of its own thread.
 | Delete or alter its own thread's queue, feed or transcript, including inventing "the user said…" events | It's that thread's own conversation. No other thread or user is affected. |
 | Exfiltrate its own thread's data over the network | The agent needs network access to do its job, and it only ever holds its own thread. |
 | Read, replace or add files in its own thread, including ones later messages attach | Same as the transcript: its own thread's data. The client re-checks a file's size and type in S3 when a message attaches it. |
-| Read its own user's caller token | That token grants only what that user can already do through MCP, and it lives a few hours. |
+| Read the caller token of the turn it runs (its user's, or a service account's) and call the app's MCP with it directly | That token grants only what its principal can already do through MCP, and it lives a few hours. The app decides what a principal may do: give an automated agent a service account scoped to its job, not a person's token. A turn never switches principal midway, so text written by one principal (say, a profile under review) never runs with another's token in the same turn. |
 | Read the Claude credential | The Claude CLI needs it inside the microVM. Mitigation: an API key with a spend limit, or Bedrock mode (temporary IAM credentials, nothing long-lived to steal). |
 
 ## Verification

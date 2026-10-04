@@ -30,13 +30,26 @@ export type WaspAgentArgs = {
    * Only the waker reads it; it reaches a microVM in the invocation.
    */
   claudeCredentialsParameter: string;
-  /** A folder with `prompt.md`, appended to the Claude Code system prompt. Baked into the image. */
+  /**
+   * A folder baked into the image: `prompt.md` (appended to the Claude Code
+   * system prompt) and optionally `wasp.config.json` (model, turns, budget,
+   * tools, mcpServers). The args below override that file.
+   */
   definition?: string;
   /** `browser` adds Chromium and playwright-core to the sandbox. */
   flavor?: 'base' | 'browser';
   model?: string;
   maxTurns?: number;
   maxBudgetUsd?: number;
+  /**
+   * MCP servers the agent may call. `auth: 'caller'`: each request carries the
+   * caller token of the message whose turn is running (`wasp.post({ callerToken })`);
+   * `'none'` (default): no credential. URLs may be outputs, e.g. another stack's.
+   */
+  mcpServers?: Record<string, { url: Pulumi.Input<string>; auth?: 'caller' | 'none' }>;
+  /** Restricts the tools the agent has (built-in and MCP, e.g. `mcp__app__get_profile`). */
+  tools?: string[];
+  disallowedTools?: string[];
   /** Let `sst remove` delete the bucket with its transcripts. Off by default. */
   removable?: boolean;
   /**
@@ -122,6 +135,7 @@ export class WaspAgent extends $util.ComponentResource {
     mkdirSync(path.join(buildDir, 'definition'), { recursive: true });
     if (args.definition) cpSync(path.resolve(args.definition), path.join(buildDir, 'definition'), { recursive: true });
     const hasPrompt = existsSync(path.join(buildDir, 'definition', 'prompt.md'));
+    const hasConfig = existsSync(path.join(buildDir, 'definition', 'wasp.config.json'));
 
     // ECR wants lowercase names, which Pulumi's auto-naming does not produce.
     const repositoryName = `${$app.name}-${$app.stage}-${name}`.toLowerCase().replace(/[^a-z0-9._/-]/g, '-');
@@ -252,10 +266,15 @@ export class WaspAgent extends $util.ComponentResource {
           AWS_REGION: region,
           WASP_TABLE: this.table.name,
           WASP_BUCKET: this.bucket.bucket,
-          WASP_MODEL: args.model ?? 'claude-sonnet-5-5',
-          WASP_MAX_TURNS: String(args.maxTurns ?? 40),
-          WASP_MAX_BUDGET_USD: String(args.maxBudgetUsd ?? 5),
-          ...(hasPrompt ? { WASP_SYSTEM_PROMPT_FILE: '/app/definition/prompt.md' } : {})
+          // Only what the args set: the rest comes from wasp.config.json, then the runner's defaults.
+          ...(args.model ? { WASP_MODEL: args.model } : {}),
+          ...(args.maxTurns ? { WASP_MAX_TURNS: String(args.maxTurns) } : {}),
+          ...(args.maxBudgetUsd ? { WASP_MAX_BUDGET_USD: String(args.maxBudgetUsd) } : {}),
+          ...(args.mcpServers ? { WASP_MCP_SERVERS: $jsonStringify(args.mcpServers) } : {}),
+          ...(args.tools ? { WASP_TOOLS: JSON.stringify(args.tools) } : {}),
+          ...(args.disallowedTools ? { WASP_DISALLOWED_TOOLS: JSON.stringify(args.disallowedTools) } : {}),
+          ...(hasPrompt ? { WASP_SYSTEM_PROMPT_FILE: '/app/definition/prompt.md' } : {}),
+          ...(hasConfig ? { WASP_CONFIG_FILE: '/app/definition/wasp.config.json' } : {})
         }
       },
       { parent: this, dependsOn: [settled] }

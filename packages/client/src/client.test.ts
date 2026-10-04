@@ -32,6 +32,10 @@ describe('wasp client', () => {
     const pending = await store.pending(thread);
     expect(pending.map((m) => m.text)).toEqual(['urgent', 'first']);
     expect(pending[0]?.callerToken).toBe(`enc(${thread}:secret)`);
+    expect(pending[0]?.principal).toBeUndefined();
+    await client.post(thread, { text: 'as someone', callerToken: 't', principal: 'user:42' });
+    expect((await store.pending(thread)).find((m) => m.text === 'as someone')?.principal).toBe('user:42');
+    await expect(client.post(thread, { text: 'x', principal: 'p'.repeat(201) })).rejects.toThrow(/principal/);
   });
 
   it('refuses a thread id that is not a UUID, and empty or oversized text', async () => {

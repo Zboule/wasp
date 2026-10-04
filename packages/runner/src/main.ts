@@ -1,11 +1,15 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DecryptCommand, KMSClient } from '@aws-sdk/client-kms';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { createDynamoStore } from '@zboule/wasp-store';
 import { readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 
+import { callerIdentity } from './caller.ts';
+import { loadConfig } from './config.ts';
 import { createS3Files } from './files.ts';
+import { createMcpProxy } from './mcpProxy.ts';
 import { createS3SessionStore } from './s3SessionStore.ts';
 import { sdkAgent, threadWorkDir } from './sdkAgent.ts';
 import { type ThreadCredentials, createRunnerServer } from './server.ts';
@@ -26,6 +30,11 @@ const bucket = env('WASP_BUCKET');
 const systemPromptFile = process.env.WASP_SYSTEM_PROMPT_FILE;
 const workDir = env('WASP_WORK_DIR', '/work');
 const systemPrompt = systemPromptFile ? readFileSync(systemPromptFile, 'utf8') : process.env.WASP_SYSTEM_PROMPT;
+const config = loadConfig(process.env, (file) => readFileSync(file, 'utf8'));
+
+// One microVM serves one thread, so one proxy and one current caller token.
+const proxy = config.mcpServers ? createMcpProxy(config.mcpServers) : undefined;
+const mcpServers = proxy ? await proxy.start() : undefined;
 
 /** The SDK clients take a provider, so a refresh from the waker applies to the next call. */
 const provider = (credentials: () => ThreadCredentials) => async () => {
@@ -51,14 +60,31 @@ const server = createRunnerServer({
         return key;
       },
       files: createS3Files({ client: s3, bucket, threadId, dir: threadWorkDir(workDir, threadId) }),
+      ...(proxy
+        ? {
+            useCaller: callerIdentity({
+              setToken: proxy.setToken,
+              // The thread's own credentials can only decrypt with this thread's encryption context.
+              async decrypt(ciphertext) {
+                const kms = new KMSClient({ region, credentials: provider(credentials) });
+                const out = await kms.send(new DecryptCommand({ CiphertextBlob: Buffer.from(ciphertext, 'base64'), EncryptionContext: { threadId } }));
+                return new TextDecoder().decode(out.Plaintext);
+              }
+            })
+          }
+        : {}),
       agent: sdkAgent({
-        model: env('WASP_MODEL', 'claude-sonnet-5-5'),
+        model: config.model,
         workDir,
         sessionStore: createS3SessionStore({ client: s3, bucket, threadId }),
         claude,
         ...(systemPrompt ? { systemPrompt } : {}),
-        maxTurns: Number(env('WASP_MAX_TURNS', '40')),
-        maxBudgetUsd: Number(env('WASP_MAX_BUDGET_USD', '5'))
+        maxTurns: config.maxTurns,
+        maxBudgetUsd: config.maxBudgetUsd,
+        // The SDK sees only the local proxy URLs: no token in its configuration.
+        ...(mcpServers ? { mcpServers } : {}),
+        ...(config.tools ? { tools: config.tools } : {}),
+        ...(config.disallowedTools ? { disallowedTools: config.disallowedTools } : {})
       })
     };
   }

@@ -29,8 +29,8 @@ export function storeContract(name: string, makeStore: () => Promise<ThreadStore
     it('delivers a message once, and forgets its caller token when it does', async () => {
       const store = await makeStore();
       const t = thread();
-      const m = await store.enqueue(t, { ...message('a'), callerToken: 'encrypted-token' });
-      expect((await store.pending(t))[0]?.callerToken).toBe('encrypted-token');
+      const m = await store.enqueue(t, { ...message('a'), callerToken: 'encrypted-token', principal: 'user:42' });
+      expect((await store.pending(t))[0]).toMatchObject({ callerToken: 'encrypted-token', principal: 'user:42' });
 
       expect(await store.claim(t, m.id, Date.now())).toBe(true);
       expect(await store.claim(t, m.id, Date.now())).toBe(false);

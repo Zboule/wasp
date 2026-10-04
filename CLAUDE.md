@@ -33,12 +33,17 @@ that only works if the agent behaves is not secure.
 5. **Caller tokens** (MCP as the user) are encrypted with KMS under encryption
    context `{ threadId }`. Only the runner decrypts them, at delivery, for that
    thread. They're deleted from the queue item on delivery, and never logged or
-   written to the transcript, the feed or a prompt.
+   written to the transcript, the feed, a prompt or the SDK's configuration (it
+   only sees the localhost MCP proxy). The plaintext lives in the runner's memory
+   only, as the credential of the **running turn**: a turn keeps the principal of
+   the message that started it (an `asap` message of another principal waits for
+   the next turn), and a message without a token clears it.
 6. **The app's own data is never reachable from the microVM** except through the
    app's MCP server, as the calling user.
 7. **Accepted risks** (by design, not bugs, see `docs/security-model.md`): a
    compromised agent can alter anything in its **own** thread (queue, feed,
-   transcript), leak its own thread's data, read its own user's caller token, and
+   transcript), leak its own thread's data, read the caller token of the turn it
+   is running (its user's, or the service account the app minted it for), and
    read the Claude credential. Prefer an API key with a spend limit, or Bedrock
    mode, over a long-lived subscription token.
 8. **The boundary tests must stay green.** Today that is one unit test: the
