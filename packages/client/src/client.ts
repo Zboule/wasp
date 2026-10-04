@@ -52,6 +52,11 @@ export interface WaspClient {
   upload(threadId: string, options: UploadOptions): Promise<Upload>;
   post(threadId: string, options: PostOptions): Promise<{ messageId: string; position: number }>;
   feed(threadId: string, options?: { after?: string | null; limit?: number }): Promise<FeedPage>;
+  /**
+   * A fresh download URL for one of this thread's files. Those in the feed
+   * expire after a few minutes, so a page that stays open asks again on click.
+   */
+  download(threadId: string, ref: string): Promise<string>;
   interrupt(threadId: string): Promise<void>;
   cancel(threadId: string, messageId: string): Promise<CancelResult>;
   deleteThread(threadId: string): Promise<void>;
@@ -180,6 +185,13 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
         entries: await Promise.all(entries.map((entry) => resolveRefs(threadId, entry))),
         cursor: entries.at(-1)?.cursor ?? after
       };
+    },
+
+    async download(threadId, ref) {
+      checkThread(threadId);
+      const parsed = parseFileRef(threadId, ref);
+      if (!parsed) throw new Error('wasp: not a file of this thread');
+      return deps.presign(ref, { download: parsed.name });
     },
 
     async interrupt(threadId) {

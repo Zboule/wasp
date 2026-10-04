@@ -1,9 +1,11 @@
+import type { WaspFile } from '@zboule/wasp-protocol';
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 
 import type { TimelineItem, ToolItem } from '../core/timeline.ts';
 import { formatArgs, parseArgs, toolLabel, toolSummary } from '../core/tools.ts';
 import { useWasp } from './context.tsx';
-import { Alert, ArrowDown, Check, Chevron, Spinner, Stop } from './icons.tsx';
+import { formatBytes } from './attachments.ts';
+import { Alert, ArrowDown, Check, Chevron, Download, FileIcon, Spinner, Stop } from './icons.tsx';
 import { Markdown } from './Markdown.tsx';
 
 /** How close to the bottom still counts as "following" the conversation. */
@@ -122,7 +124,8 @@ function Item({ item, streaming }: { item: Exclude<TimelineItem, ToolItem>; stre
     case 'user': {
       const body = (
         <div className="wasp-turn user">
-          <div className="wasp-bubble">{item.text}</div>
+          {item.attachments && item.attachments.length > 0 && <Attachments files={item.attachments} />}
+          {item.text && <div className="wasp-bubble">{item.text}</div>}
           {item.deliver !== 'later' && <div className="wasp-meta">{labels.deliveredMidTurn[item.deliver]}</div>}
         </div>
       );
@@ -181,7 +184,9 @@ function ToolCall({ item }: { item: ToolItem }) {
   const view = (
     <div className={`wasp-tool ${item.status}${open ? ' open' : ''}`}>
       <button type="button" className="wasp-tool-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span className="wasp-tool-status">{item.status === 'running' ? <Spinner /> : item.status === 'error' ? <Alert /> : item.status === 'stopped' ? <Stop /> : <Check />}</span>
+        <span className="wasp-tool-status">
+          {item.status === 'running' ? <Spinner /> : item.status === 'error' ? <Alert /> : item.status === 'stopped' ? <Stop /> : <Check />}
+        </span>
         {custom?.icon && <span className="wasp-tool-icon">{custom.icon}</span>}
         <span className="wasp-tool-name">{custom?.label ?? toolLabel(item.name)}</span>
         {summary && <span className="wasp-tool-summary">{summary}</span>}
@@ -203,5 +208,47 @@ function SafeLink({ href, children }: { href: string; children: string }) {
     <a className="wasp-link" href={href} target="_blank" rel="noopener noreferrer">
       {children}
     </a>
+  );
+}
+
+/**
+ * Files on a message, as downloads. The link is the app's (fresh on every click)
+ * when the transport has one, else the feed's own, which expires; never inline.
+ */
+function Attachments({ files }: { files: WaspFile[] }) {
+  const { options } = useWasp();
+  return (
+    <ul className="wasp-files">
+      {files.map((file) => {
+        const href = options.transport.fileHref?.(file) ?? file.url;
+        const body = (
+          <>
+            <span className="wasp-file-icon">
+              <FileIcon />
+            </span>
+            <span className="wasp-file-text">
+              <span className="wasp-file-name">{file.name}</span>
+              <span className="wasp-file-meta">{formatBytes(file.size)}</span>
+            </span>
+            {href && (
+              <span className="wasp-file-get">
+                <Download />
+              </span>
+            )}
+          </>
+        );
+        return (
+          <li key={file.ref}>
+            {href && /^(https:\/\/|\/(?!\/))/.test(href) ? (
+              <a className="wasp-file" href={href} target="_blank" rel="noopener noreferrer" download={file.name}>
+                {body}
+              </a>
+            ) : (
+              <span className="wasp-file">{body}</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

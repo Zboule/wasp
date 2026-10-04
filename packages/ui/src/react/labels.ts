@@ -26,6 +26,15 @@ export type WaspLabels = {
   copy: string;
   copied: string;
   latest: string;
+  attach: string;
+  removeFile: string;
+  uploading: string;
+  uploadFailed: string;
+  fileTooLarge: (max: string) => string;
+  tooManyFiles: (max: number) => string;
+  fileEmpty: string;
+  dropFiles: string;
+  attachments: (count: number) => string;
 };
 
 export const labelsEn: WaspLabels = {
@@ -56,7 +65,16 @@ export const labelsEn: WaspLabels = {
   fullOutput: 'Full output',
   copy: 'Copy',
   copied: 'Copied',
-  latest: 'Jump to the latest'
+  latest: 'Jump to the latest',
+  attach: 'Attach files',
+  removeFile: 'Remove',
+  uploading: 'Uploading…',
+  uploadFailed: 'Upload failed',
+  fileTooLarge: (max) => `Larger than ${max}`,
+  tooManyFiles: (max) => `${max} files per message at most`,
+  fileEmpty: 'The file is empty',
+  dropFiles: 'Drop files to attach them',
+  attachments: (n) => (n === 1 ? '1 file' : `${n} files`)
 };
 
 export const labelsFr: WaspLabels = {
@@ -90,7 +108,16 @@ export const labelsFr: WaspLabels = {
   fullOutput: 'Sortie complète',
   copy: 'Copier',
   copied: 'Copié',
-  latest: 'Aller au plus récent'
+  latest: 'Aller au plus récent',
+  attach: 'Joindre des fichiers',
+  removeFile: 'Retirer',
+  uploading: 'Envoi…',
+  uploadFailed: 'Échec de l’envoi',
+  fileTooLarge: (max) => `Plus de ${max}`,
+  tooManyFiles: (max) => `${max} fichiers par message au plus`,
+  fileEmpty: 'Le fichier est vide',
+  dropFiles: 'Déposez des fichiers pour les joindre',
+  attachments: (n) => (n === 1 ? '1 fichier' : `${n} fichiers`)
 };
 
 export function resolveLabels(labels?: Partial<WaspLabels>): WaspLabels {

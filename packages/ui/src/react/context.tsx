@@ -3,6 +3,7 @@ import { type ComponentType, type ReactNode, createContext, useCallback, useCont
 
 import { type WaspSession, type WaspSessionState, type WaspTransport, createWaspSession } from '../core/session.ts';
 import type { TimelineItem, ToolItem } from '../core/timeline.ts';
+import { type Attachments, DEFAULT_FILE_LIMITS, type FileLimits, useAttachments } from './attachments.ts';
 import { type WaspLabels, resolveLabels } from './labels.ts';
 
 /**
@@ -48,6 +49,8 @@ export type WaspOptions = {
   suggestions?: string[];
   tools?: Record<string, WaspToolRenderer>;
   components?: Partial<WaspComponents>;
+  /** Checked before uploading, for an early answer; the API enforces its own. Defaults to wasp-client's. */
+  fileLimits?: Partial<FileLimits>;
   className?: string;
 };
 
@@ -62,8 +65,10 @@ type WaspContextValue = {
   draft: string;
   setDraft: (text: string | ((current: string) => string)) => void;
   composerRef: React.RefObject<HTMLTextAreaElement | null>;
+  /** Files on their way into the next message (when the transport can upload). */
+  attachments: Attachments;
   /** Sends a message; resolves false if it could not be sent. */
-  send: (text: string, deliver?: Deliver) => Promise<boolean>;
+  send: (text: string, deliver?: Deliver, files?: string[]) => Promise<boolean>;
 };
 
 const WaspContext = createContext<WaspContextValue | null>(null);
@@ -99,6 +104,10 @@ export function WaspRoot({ children, ...options }: WaspOptions & { children: Rea
   const [draft, setDraft] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const defaultDeliver = options.defaultDeliver ?? 'asap';
+  const limits = useMemo(() => ({ ...DEFAULT_FILE_LIMITS, ...options.fileLimits }), [options.fileLimits]);
+  const attachments = useAttachments(options.transport, labels, limits);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
 
   const toolRenderer = useCallback(
     (name: string) => {
@@ -114,11 +123,11 @@ export function WaspRoot({ children, ...options }: WaspOptions & { children: Rea
   );
 
   const send = useCallback(
-    async (text: string, deliver: Deliver = defaultDeliver) => {
+    async (text: string, deliver: Deliver = defaultDeliver, files: string[] = []) => {
       const message = text.trim();
-      if (!message) return false;
+      if (!message && files.length === 0) return false;
       try {
-        await session.post(message, deliver);
+        await session.post(message, deliver, files);
         return true;
       } catch (error) {
         session.store.setState({
@@ -141,13 +150,52 @@ export function WaspRoot({ children, ...options }: WaspOptions & { children: Rea
     draft,
     setDraft,
     composerRef,
+    attachments,
     send
+  };
+
+  // Files dropped anywhere on the chat join the next message.
+  const hasFiles = (e: React.DragEvent) => attachments.enabled && Array.from(e.dataTransfer.types).includes('Files');
+  const drop = {
+    onDragEnter: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current++;
+      setDragging(true);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setDragging(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+      attachments.add(Array.from(e.dataTransfer.files));
+      composerRef.current?.focus();
+    }
   };
 
   return (
     <WaspContext.Provider value={value}>
-      <div className={`wasp${options.className ? ` ${options.className}` : ''}`} data-scheme={options.colorScheme ?? 'auto'} data-state={state.state}>
+      <div
+        className={`wasp${options.className ? ` ${options.className}` : ''}`}
+        data-scheme={options.colorScheme ?? 'auto'}
+        data-state={state.state}
+        data-dragging={dragging || undefined}
+        {...drop}
+      >
         {children}
+        {dragging && (
+          <div className="wasp-drop" aria-hidden="true">
+            <span>{labels.dropFiles}</span>
+          </div>
+        )}
       </div>
     </WaspContext.Provider>
   );

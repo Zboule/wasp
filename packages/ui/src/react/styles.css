@@ -832,3 +832,171 @@
     transition: none !important;
   }
 }
+
+/* --- files --------------------------------------------------------------- */
+
+.wasp-chips {
+  list-style: none;
+  margin: 0;
+  padding: 10px 10px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wasp-file-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  padding: 6px 4px 6px 9px;
+  border: 1px solid var(--w-line);
+  border-radius: 10px;
+  background: var(--w-soft);
+  overflow: hidden;
+  font-size: 13px;
+}
+.wasp-file-chip.error {
+  border-color: color-mix(in srgb, var(--w-error) 50%, var(--w-line));
+  color: var(--w-error);
+}
+.wasp-file-chip-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--w-muted);
+}
+.wasp-file-chip.error .wasp-file-chip-icon {
+  color: var(--w-error);
+}
+.wasp-file-chip-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.wasp-file-chip-text,
+.wasp-file-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+.wasp-file-chip-name,
+.wasp-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.wasp-file-chip-meta,
+.wasp-file-meta {
+  font-size: 11.5px;
+  color: var(--w-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wasp-file-chip.error .wasp-file-chip-meta {
+  color: var(--w-error);
+}
+.wasp-file-chip-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--w-accent);
+  transition: width 0.2s;
+}
+
+.wasp-attach {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+.wasp-attach svg {
+  width: 17px;
+  height: 17px;
+}
+
+.wasp-files {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+.wasp-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--w-line);
+  border-radius: 12px;
+  background: var(--w-surface);
+  color: inherit;
+  text-decoration: none;
+  font-size: 13.5px;
+  transition: border-color 0.15s;
+}
+a.wasp-file:hover {
+  border-color: var(--w-accent);
+}
+.wasp-file-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--w-user-bg);
+  color: var(--w-ink);
+}
+.wasp-file-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.wasp-file-get {
+  display: inline-grid;
+  margin-left: 2px;
+  color: var(--w-muted);
+}
+.wasp-file-get svg {
+  width: 15px;
+  height: 15px;
+}
+
+.wasp-queue-files {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  color: var(--w-muted);
+  font-size: 12px;
+}
+.wasp-queue-files svg {
+  width: 12px;
+  height: 12px;
+}
+
+.wasp-drop {
+  position: absolute;
+  inset: 8px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--w-accent);
+  border-radius: calc(var(--w-radius) + 4px);
+  background: color-mix(in srgb, var(--w-bg) 82%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  font-weight: 600;
+}
+.wasp-drop span {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--w-surface);
+  box-shadow: var(--w-shadow);
+}

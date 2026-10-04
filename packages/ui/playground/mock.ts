@@ -1,4 +1,4 @@
-import type { CancelResult, Deliver, FeedEntry, FeedEvent, FeedPage, QueuedMessage, ThreadState } from '@zboule/wasp-protocol';
+import type { CancelResult, Deliver, FeedEntry, FeedEvent, FeedPage, QueuedMessage, ThreadState, WaspFile } from '@zboule/wasp-protocol';
 
 import type { WaspTransport } from '../src/index.ts';
 
@@ -16,9 +16,15 @@ export function mockTransport({ seed = true } = {}): WaspTransport {
   let seq = 0;
   let running = false;
   let interrupt = false;
+  const uploaded = new Map<string, WaspFile>();
 
   const emit = (event: FeedEvent) => entries.push({ cursor: String(++seq).padStart(8, '0'), at: Date.now(), event });
-  const deliverMsg = (m: QueuedMessage) => emit({ type: 'CUSTOM', name: 'wasp.message', value: { messageId: m.id, text: m.text, deliver: m.deliver } });
+  const deliverMsg = (m: QueuedMessage) =>
+    emit({
+      type: 'CUSTOM',
+      name: 'wasp.message',
+      value: { messageId: m.id, text: m.text, deliver: m.deliver, ...(m.attachments ? { attachments: m.attachments } : {}) }
+    });
 
   async function say(text: string) {
     const id = `a${++seq}`;
@@ -72,7 +78,16 @@ export function mockTransport({ seed = true } = {}): WaspTransport {
   async function turn(m: QueuedMessage) {
     const text = m.text.toLowerCase();
     const steps: (() => Promise<boolean>)[] = [];
-    if (text.includes('fail')) {
+    if (m.attachments?.length) {
+      const names = m.attachments.map((f) => f.name);
+      steps.push(
+        () => tool('Bash', { command: `ls -la files/*/` }, names.map((n) => `-rw-r--r-- 1 agent agent 1234 ${n}`).join('\n')),
+        () =>
+          say(
+            `I have ${names.length === 1 ? 'your file' : `your ${names.length} files`}: ${names.map((n) => `\`${n}\``).join(', ')}. What should I do with ${names.length === 1 ? 'it' : 'them'}?`
+          )
+      );
+    } else if (text.includes('fail')) {
       steps.push(
         () => tool('Bash', { command: 'cat /etc/missing.conf' }, 'cat: /etc/missing.conf: No such file or directory', { error: true }),
         async () => {
@@ -149,13 +164,21 @@ export function mockTransport({ seed = true } = {}): WaspTransport {
     ] as const) {
       emit({ type: 'TOOL_CALL_START', toolCallId: id, toolCallName: name });
       emit({ type: 'TOOL_CALL_ARGS', toolCallId: id, delta: JSON.stringify(args) });
-      emit({ type: 'TOOL_CALL_RESULT', messageId: `${id}r`, toolCallId: id, content: out, ...(error ? { isError: true } : {}), ...(id === 'seed-t3' ? { outputRef: 'https://example.com/out' } : {}) });
+      emit({
+        type: 'TOOL_CALL_RESULT',
+        messageId: `${id}r`,
+        toolCallId: id,
+        content: out,
+        ...(error ? { isError: true } : {}),
+        ...(id === 'seed-t3' ? { outputRef: 'https://example.com/out' } : {})
+      });
     }
     emit({ type: 'TEXT_MESSAGE_START', messageId: 'seed-a2', role: 'assistant' });
     emit({
       type: 'TEXT_MESSAGE_CONTENT',
       messageId: 'seed-a2',
-      delta: 'It is a **Linux arm64** microVM. There is no `/opt/tools`, and the workspace has *40* TODOs left.\n\n1. Check the image\n2. Clean the TODOs\n\n> Everything here runs inside the sandbox.'
+      delta:
+        'It is a **Linux arm64** microVM. There is no `/opt/tools`, and the workspace has *40* TODOs left.\n\n1. Check the image\n2. Clean the TODOs\n\n> Everything here runs inside the sandbox.'
     });
     emit({ type: 'RUN_FINISHED', threadId: 'demo', runId: 'seed', result: { outcome: 'done' } });
     deliverMsg({ id: 'seed-u2', text: 'Stop, that is enough for now.', deliver: 'now', createdAt: 0 });
@@ -168,9 +191,37 @@ export function mockTransport({ seed = true } = {}): WaspTransport {
       const fresh = entries.filter((e) => !after || e.cursor > after);
       return { state, queue: queue.map((m) => ({ ...m })), entries: fresh, cursor: fresh.at(-1)?.cursor ?? after };
     },
-    async post(text: string, deliver: Deliver) {
+    async upload(file: File, onProgress?: (fraction: number) => void) {
+      if (file.name.toLowerCase().includes('fail')) {
+        await sleep(400);
+        throw new Error('Upload refused (403)');
+      }
+      for (let step = 1; step <= 10; step++) {
+        await sleep(90);
+        onProgress?.(step / 10);
+      }
+      const id = crypto.randomUUID();
+      const ref = `payloads/demo/files/${id}/${file.name}`;
+      uploaded.set(ref, {
+        id,
+        name: file.name,
+        mediaType: file.type || 'application/octet-stream',
+        size: file.size,
+        ref,
+        url: `https://example.com/files/${encodeURIComponent(file.name)}`
+      });
+      return ref;
+    },
+    async post(text: string, deliver: Deliver, files?: string[]) {
       await sleep(60);
-      const m: QueuedMessage = { id: crypto.randomUUID(), text, deliver: running ? deliver : 'later', createdAt: Date.now() };
+      const attachments = (files ?? []).map((ref) => uploaded.get(ref)).filter((f): f is WaspFile => Boolean(f));
+      const m: QueuedMessage = {
+        id: crypto.randomUUID(),
+        text,
+        deliver: running ? deliver : 'later',
+        createdAt: Date.now(),
+        ...(attachments.length ? { attachments } : {})
+      };
       queue.push(m);
       void loop();
       return { messageId: m.id, position: queue.length - 1 };

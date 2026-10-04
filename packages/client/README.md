@@ -32,5 +32,7 @@ await wasp.post(threadId, { text, files: [ref] });
 ```
 
 The agent finds each file at `files/<id>/<name>` in its working directory. In `feed`, attachments on queued
-and delivered messages carry a `url` that downloads the file for 15 minutes. Limits default to 25 MB per file
+and delivered messages carry a `url` that downloads the file for 15 minutes. For a link that never goes stale,
+serve `GET /threads/:id/files?ref=` as a redirect to `await wasp.download(threadId, ref)`, which signs a fresh one
+(this thread's files only). Limits default to 25 MB per file
 and 10 files per message: `createWaspClient(Resource.Agent, { limits: { maxFileBytes, maxFiles } })`.
