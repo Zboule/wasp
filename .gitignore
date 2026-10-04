@@ -9,3 +9,4 @@ dist/
 coverage/
 packages/runner/legacy/deploy/.state*
 apps/playground/examples/poc/wisp.js
+.packs/

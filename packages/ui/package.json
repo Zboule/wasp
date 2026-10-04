@@ -1,12 +1,32 @@
 {
   "name": "@zboule/wasp-ui",
   "version": "0.1.0",
-  "description": "The chat UI for a wasp thread: a headless session (any framework) and a React component",
+  "description": "The chat UI for a wasp thread: a headless session, a React component and a one-file embed.",
+  "keywords": [
+    "wasp",
+    "agent",
+    "chat",
+    "react",
+    "ag-ui"
+  ],
+  "author": "Jordane Cure",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zboule/wasp.git",
+    "directory": "packages/ui"
+  },
+  "homepage": "https://github.com/Zboule/wasp#readme",
+  "bugs": "https://github.com/Zboule/wasp/issues",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/react/styles.css"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "typecheck": "tsc -p .",
     "test": "vitest run",
@@ -35,10 +55,6 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
-  "license": "MIT",
-  "files": [
-    "dist"
-  ],
   "publishConfig": {
     "access": "public",
     "exports": {

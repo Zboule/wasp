@@ -1,20 +1,35 @@
 {
   "name": "@zboule/wasp-protocol",
   "version": "0.1.0",
-  "description": "The contracts between the wasp runner, client and UI: AG-UI feed events, queue and thread state",
+  "description": "The shared contracts of wasp: AG-UI feed events, the queue, thread state and the store interface.",
+  "keywords": [
+    "wasp",
+    "agent",
+    "ag-ui",
+    "protocol"
+  ],
+  "author": "Jordane Cure",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zboule/wasp.git",
+    "directory": "packages/protocol"
+  },
+  "homepage": "https://github.com/Zboule/wasp#readme",
+  "bugs": "https://github.com/Zboule/wasp/issues",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "typecheck": "tsc -p .",
     "test": "vitest run",
     "build": "tsup src/index.ts --format esm --dts --clean"
   },
-  "license": "MIT",
-  "files": [
-    "dist"
-  ],
   "publishConfig": {
     "access": "public",
     "exports": {

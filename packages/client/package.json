@@ -1,11 +1,31 @@
 {
   "name": "@zboule/wasp-client",
   "version": "0.1.0",
-  "description": "Call wasp from your app's API: post messages, read a thread's feed, interrupt, cancel",
+  "description": "Call wasp from your API: post messages to a thread, read its feed, interrupt, cancel.",
+  "keywords": [
+    "wasp",
+    "agent",
+    "claude",
+    "agentcore",
+    "client"
+  ],
+  "author": "Jordane Cure",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zboule/wasp.git",
+    "directory": "packages/client"
+  },
+  "homepage": "https://github.com/Zboule/wasp#readme",
+  "bugs": "https://github.com/Zboule/wasp/issues",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "typecheck": "tsc -p .",
     "test": "vitest run",
@@ -19,10 +39,9 @@
     "@aws-sdk/s3-request-presigner": "^3.1146.0",
     "@zboule/wasp-protocol": "workspace:*"
   },
-  "license": "MIT",
-  "files": [
-    "dist"
-  ],
+  "devDependencies": {
+    "@zboule/wasp-store": "workspace:*"
+  },
   "publishConfig": {
     "access": "public",
     "exports": {
@@ -31,8 +50,5 @@
         "import": "./dist/index.js"
       }
     }
-  },
-  "devDependencies": {
-    "@zboule/wasp-store": "workspace:*"
   }
 }

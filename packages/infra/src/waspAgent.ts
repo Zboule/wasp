@@ -108,7 +108,13 @@ export class WaspAgent extends $util.ComponentResource {
     if (args.definition) cpSync(path.resolve(args.definition), path.join(buildDir, 'definition'), { recursive: true });
     const hasPrompt = existsSync(path.join(buildDir, 'definition', 'prompt.md'));
 
-    const repository = new aws.ecr.Repository(`${name}Repository`, { forceDelete: true, imageScanningConfiguration: { scanOnPush: true } }, parent);
+    // ECR wants lowercase names, which Pulumi's auto-naming does not produce.
+    const repositoryName = `${$app.name}-${$app.stage}-${name}`.toLowerCase().replace(/[^a-z0-9._/-]/g, '-');
+    const repository = new aws.ecr.Repository(
+      `${name}Repository`,
+      { name: repositoryName, forceDelete: true, imageScanningConfiguration: { scanOnPush: true } },
+      parent
+    );
     const auth = aws.ecr.getAuthorizationTokenOutput({ registryId: repository.registryId }, parent);
     const image = new dockerbuild.Image(
       `${name}Image`,

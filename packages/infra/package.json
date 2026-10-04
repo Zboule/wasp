@@ -1,12 +1,36 @@
 {
   "name": "@zboule/wasp-infra",
   "version": "0.1.0",
-  "description": "WaspAgent: the SST component that deploys wasp (AgentCore runtime, storage, waker, roles) into your AWS account",
+  "description": "WaspAgent, the SST component that deploys wasp into your AWS account: AgentCore runtime, storage, waker and IAM.",
+  "keywords": [
+    "wasp",
+    "agent",
+    "claude",
+    "agentcore",
+    "sst",
+    "pulumi",
+    "aws"
+  ],
+  "author": "Jordane Cure",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zboule/wasp.git",
+    "directory": "packages/infra"
+  },
+  "homepage": "https://github.com/Zboule/wasp#readme",
+  "bugs": "https://github.com/Zboule/wasp/issues",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "image",
+    "assets",
+    "README.md"
+  ],
   "scripts": {
     "typecheck": "tsc -p .",
     "test": "vitest run",
@@ -28,12 +52,6 @@
     "@types/aws-lambda": "^8.10.164",
     "esbuild": "^0.25.12"
   },
-  "license": "MIT",
-  "files": [
-    "dist",
-    "image",
-    "assets"
-  ],
   "publishConfig": {
     "access": "public",
     "exports": {

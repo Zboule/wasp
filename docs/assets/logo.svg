@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="wasp">
+  <title>wasp</title>
+  <!-- Honeycomb cell -->
+  <path d="M64 6 114 35v58L64 122 14 93V35Z" fill="#f5a524"/>
+  <path d="M64 14 107 39v50L64 114 21 89V39Z" fill="#1d1b19"/>
+  <!-- Wings -->
+  <path d="M60 50C46 34 28 36 30 48c1.6 9.6 18 10 30 6Z" fill="#fbe7c0" opacity="0.92"/>
+  <path d="M68 50c14-16 32-14 30-2-1.6 9.6-18 10-30 6Z" fill="#fbe7c0" opacity="0.92"/>
+  <!-- Body: a striped capsule -->
+  <rect x="52" y="48" width="24" height="52" rx="12" fill="#f5a524"/>
+  <path d="M52 66h24v7H52zM52 81h24v7H52z" fill="#1d1b19"/>
+  <!-- Head and antennae -->
+  <circle cx="64" cy="42" r="9" fill="#f5a524"/>
+  <path d="M60 34c-3-6-7-9-11-10M68 34c3-6 7-9 11-10" stroke="#f5a524" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <!-- Sting -->
+  <path d="M60 99h8l-4 9Z" fill="#f5a524"/>
+</svg>
