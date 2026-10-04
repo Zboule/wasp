@@ -23,7 +23,16 @@ export type DrainDeps = {
   onTick?: () => Promise<void>;
   /** Puts the thread's uploaded files in the agent's working directory. Without it, attachments are only listed. */
   files?: ThreadFiles;
+  /**
+   * Called with each message just before it is delivered, while it still holds
+   * its caller token (the claim deletes it): makes that token the credential of
+   * the MCP calls that follow, or clears it when the message has none. A token
+   * that cannot be used fails the message instead of delivering it.
+   */
+  useCaller?: (message: StoredMessage) => Promise<CallerResult>;
 };
+
+export type CallerResult = { ok: true } | { ok: false; reason: 'token_expired' | 'invalid' };
 
 /** Feed items stay well under DynamoDB's 400 KB item limit. */
 export const INLINE_LIMIT = 64 * 1024;
@@ -74,6 +83,8 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   let running = false;
   let interrupting = false;
   let runId = newId();
+  /** The principal of the message that started the running turn: the turn acts as no one else. */
+  let turnPrincipal: string | undefined;
 
   // The event loop and the poll tick both touch the queue; run them one at a time.
   let chain: Promise<unknown> = Promise.resolve();
@@ -86,7 +97,14 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   const deliver = async (message: StoredMessage, priority?: 'next'): Promise<boolean> => {
     // Before the claim: once claimed, the message is the agent's, and its files must already be there.
     if (message.attachments?.length) await deps.files?.fetch(message.attachments);
+    const caller = (await deps.useCaller?.(message)) ?? { ok: true };
     if (!(await store.claim(threadId, message.id, now()))) return false;
+    if (!caller.ok) {
+      // Claimed so it leaves the queue (and its token is deleted), but never shown to the agent.
+      await store.append(threadId, [{ type: 'CUSTOM', name: 'wasp.message_failed', value: { messageId: message.id, reason: caller.reason } }], now());
+      return false;
+    }
+    if (!priority) turnPrincipal = message.principal;
     const { id: messageId, text, deliver: mode, attachments } = message;
     await store.append(
       threadId,
@@ -125,7 +143,8 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
           await interrupt(session);
           return;
         }
-        if (message.deliver === 'asap') await deliver(message, 'next');
+        // Another principal's message waits for the next turn instead of joining this one.
+        if (message.deliver === 'asap' && message.principal === turnPrincipal) await deliver(message, 'next');
       }
     });
 
@@ -146,9 +165,15 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
     await s.interrupt();
   }
 
-  await serial(async () => {
-    if (!(await deliver(first))) await startNext();
-  });
+  try {
+    await serial(async () => {
+      if (!(await deliver(first))) await startNext();
+    });
+  } catch (error) {
+    // Nothing was sent: close the session, or its query stays open.
+    session.end();
+    throw error;
+  }
   const timer = setInterval(() => void tick().catch(() => undefined), pollMs);
   try {
     for await (const event of session.events) {

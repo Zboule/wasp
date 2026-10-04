@@ -102,7 +102,34 @@ providers: {
 }
 ```
 
-Your agent is a folder: `agent/prompt.md` is appended to the Claude Code system prompt.
+Your agent is a folder: `agent/prompt.md` is appended to the Claude Code system prompt, and
+`agent/wasp.config.json` (optional) sets the rest:
+
+```json
+{
+  "model": "claude-sonnet-5-5",
+  "maxTurns": 40,
+  "maxBudgetUsd": 5,
+  "disallowedTools": ["NotebookEdit"],
+  "mcpServers": { "app": { "url": "https://mcp.example.com/mcp", "auth": "caller" } }
+}
+```
+
+`WaspAgent`'s args (`model`, `maxTurns`, `maxBudgetUsd`, `tools`, `disallowedTools`, `mcpServers`) override
+the file, and take outputs (a URL per stage, say).
+
+### Your app's MCP, as the caller
+
+An MCP server with `auth: "caller"` gets, on every request, the token of the message whose turn is running:
+
+```ts
+await wasp.post(threadId, { text, callerToken: userToken, principal: `user:${userId}` });
+```
+
+The token is encrypted per thread (KMS) until the runner delivers the message. The agent's MCP calls then go
+through a proxy in the microVM that adds it. A turn keeps the principal it started with: an `asap` message
+from another principal waits for the next turn. For automated work, mint a token for a service account
+scoped to the job rather than passing a person's token: the agent can read the token of the turn it runs.
 
 Then expose five routes per thread from your API (check that the user owns the thread first), and point the UI
 at them:
@@ -136,11 +163,9 @@ wasp is **experimental (0.x)**: it runs end to end in a private demo, and its AP
 
 Done: queue with `later` / `asap` / `now`, interrupt, file uploads (user → agent), durable AG-UI feed with cursor paging, transcript
 persistence and resume, per-thread credentials, large-output offload to S3, credential refresh, self-healing
-wake-ups, a React chat (Markdown, queue with cancel and edit, send and stop in the input) with themes, and an embed.
+wake-ups, MCP servers called as the caller (per-turn identity), `wasp.config.json`, a React chat (Markdown, queue with cancel and edit, send and stop in the input) with themes, and an embed.
 
 Next:
-- MCP servers called **as the user** (caller tokens are already stored encrypted per message; the runner wiring is next)
-- `wasp.config.json` for model, tools and MCP servers alongside `prompt.md`
 - Live nudges (AppSync Events) on top of polling
 - A scheduled sweep for stalled threads nobody is watching
 - The escape test: an end-to-end suite where the agent tries to break out, and fails

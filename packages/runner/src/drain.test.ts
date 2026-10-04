@@ -45,10 +45,10 @@ const until = async (condition: () => Promise<boolean>) => {
   throw new Error('condition never held');
 };
 
-function setup(script?: Script) {
+function setup(script?: Script, extra: Partial<Parameters<typeof drain>[1]> = {}) {
   const store = createMemoryStore();
   const { agent, sent } = scriptedAgent(script);
-  const run = (owner = 'runner-a') => drain(T, { store, agent, owner, now, pollMs: 2, leaseMs: 1_000 });
+  const run = (owner = 'runner-a') => drain(T, { store, agent, owner, now, pollMs: 2, leaseMs: 1_000, ...extra });
   const feed = async () => story(await store.feed(T));
   return { store, sent, run, feed };
 }
@@ -82,9 +82,20 @@ describe('drain', () => {
     slow.open();
     await draining;
     expect(await feed()).toEqual([
-      '> first', 'run', 'tool:work', 'tool-ok', 'first done', 'done',
-      '> second', 'run', 'echo:second', 'done',
-      '> third', 'run', 'echo:third', 'done'
+      '> first',
+      'run',
+      'tool:work',
+      'tool-ok',
+      'first done',
+      'done',
+      '> second',
+      'run',
+      'echo:second',
+      'done',
+      '> third',
+      'run',
+      'echo:third',
+      'done'
     ]);
   });
 
@@ -108,9 +119,7 @@ describe('drain', () => {
 
   it('interrupts the running turn for a `now` message, which goes first', async () => {
     const never = gate();
-    const { store, run, feed } = setup((text) =>
-      text === 'first' ? [{ tool: 'work', until: never.promise }] : [{ say: `echo:${text}` }]
-    );
+    const { store, run, feed } = setup((text) => (text === 'first' ? [{ tool: 'work', until: never.promise }] : [{ say: `echo:${text}` }]));
     await post(store, 'first');
     const draining = run();
     await until(async () => (await feed()).includes('tool:work'));
@@ -120,17 +129,25 @@ describe('drain', () => {
     await draining;
 
     expect(await feed()).toEqual([
-      '> first', 'run', 'tool:work', 'tool-failed', 'interrupted',
-      '> stop, do this', 'run', 'echo:stop, do this', 'done',
-      '> queued later', 'run', 'echo:queued later', 'done'
+      '> first',
+      'run',
+      'tool:work',
+      'tool-failed',
+      'interrupted',
+      '> stop, do this',
+      'run',
+      'echo:stop, do this',
+      'done',
+      '> queued later',
+      'run',
+      'echo:queued later',
+      'done'
     ]);
   });
 
   it('honours an interrupt request and carries on with the queue', async () => {
     const never = gate();
-    const { store, run, feed } = setup((text) =>
-      text === 'first' ? [{ tool: 'work', until: never.promise }] : [{ say: `echo:${text}` }]
-    );
+    const { store, run, feed } = setup((text) => (text === 'first' ? [{ tool: 'work', until: never.promise }] : [{ say: `echo:${text}` }]));
     await post(store, 'first');
     const draining = run();
     await until(async () => (await feed()).includes('tool:work'));
@@ -195,8 +212,15 @@ describe('drain', () => {
     const offloaded: string[] = [];
     await post(store, 'scrape it');
     await drain(T, {
-      store, agent, owner: 'r', now, pollMs: 2,
-      offload: async (_thread, content) => { offloaded.push(content); return 'payloads/thread-1/ref-1'; }
+      store,
+      agent,
+      owner: 'r',
+      now,
+      pollMs: 2,
+      offload: async (_thread, content) => {
+        offloaded.push(content);
+        return 'payloads/thread-1/ref-1';
+      }
     });
     const result = (await store.feed(T)).map((e) => e.event).find((e) => e.type === 'TOOL_CALL_RESULT');
     expect(offloaded).toEqual([big]);
@@ -225,7 +249,13 @@ describe('drain', () => {
   });
 
   it('restores the thread’s files when it opens, and fetches a message’s files before claiming it', async () => {
-    const file = { id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', name: 'q3.pdf', mediaType: 'application/pdf', size: 2_200_000, ref: 'payloads/x/files/f/q3.pdf' };
+    const file = {
+      id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      name: 'q3.pdf',
+      mediaType: 'application/pdf',
+      size: 2_200_000,
+      ref: 'payloads/x/files/f/q3.pdf'
+    };
     const store = createMemoryStore();
     const { agent, sent } = scriptedAgent();
     const order: string[] = [];
@@ -233,12 +263,99 @@ describe('drain', () => {
     store.claim = async (...args) => (order.push('claim'), claim(...args));
     await store.enqueue(T, { id: 'm-1', text: 'summarise this', deliver: 'later', createdAt: now(), attachments: [file] });
 
-    const files = { restoreAll: async () => void order.push('restore'), fetch: async (f: { name: string }[]) => void order.push(`fetch:${f.map((x) => x.name)}`) };
+    const files = {
+      restoreAll: async () => void order.push('restore'),
+      fetch: async (f: { name: string }[]) => void order.push(`fetch:${f.map((x) => x.name)}`)
+    };
     await drain(T, { store, agent, owner: 'r', now, pollMs: 2, files });
 
     expect(order).toEqual(['restore', 'fetch:q3.pdf', 'claim']);
     expect(sent[0]?.text).toBe(`summarise this\n\n[The user attached a file, in your working directory:\n- files/${file.id}/q3.pdf (application/pdf, 2.1 MB)]`);
     const delivered = (await store.feed(T)).map((e) => e.event).find((e) => e.type === 'CUSTOM');
     expect(delivered).toMatchObject({ value: { text: 'summarise this', attachments: [file] } });
+  });
+
+  describe('caller identity', () => {
+    async function postAs(store: ThreadStore, text: string, principal: string, deliver: Deliver = 'later') {
+      return store.enqueue(T, { id: `m-${text}`, text, deliver, createdAt: now(), principal, callerToken: `cipher(${principal})` });
+    }
+    /** What the MCP calls would carry at each delivery: the useCaller hook, as the runner wires it. */
+    function identities() {
+      const tokens: (string | undefined)[] = [];
+      const useCaller = async (m: { callerToken?: string }) => {
+        if (m.callerToken === 'cipher(broken)') return { ok: false as const, reason: 'invalid' as const };
+        tokens.push(m.callerToken);
+        return { ok: true as const };
+      };
+      return { tokens, useCaller };
+    }
+
+    it('lets an asap message of the same principal join the turn, and holds another principal’s for the next turn', async () => {
+      const slow = gate();
+      const { tokens, useCaller } = identities();
+      const { store, sent, run, feed } = setup(
+        (text) => (text === 'review' ? [{ tool: 'work', until: slow.promise }, { say: 'reviewed' }] : [{ say: `echo:${text}` }]),
+        { useCaller }
+      );
+      await postAs(store, 'review', 'reviewer');
+      const draining = run();
+      await until(async () => (await feed()).includes('tool:work'));
+
+      await postAs(store, 'admin says', 'admin:1', 'asap');
+      await postAs(store, 'reviewer adds', 'reviewer', 'asap');
+      await until(async () => sent.length === 2);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(sent.map((m) => m.text)).toEqual(['review', 'reviewer adds']);
+
+      slow.open();
+      await draining;
+      expect(await feed()).toEqual([
+        '> review',
+        'run',
+        'tool:work',
+        '> reviewer adds',
+        'tool-ok',
+        'ack:reviewer adds',
+        'reviewed',
+        'done',
+        '> admin says',
+        'run',
+        'echo:admin says',
+        'done'
+      ]);
+      // Each delivery switched the credential to its own message's token, before it reached the agent.
+      expect(tokens).toEqual(['cipher(reviewer)', 'cipher(reviewer)', 'cipher(admin:1)']);
+    });
+
+    it('fails a message whose token cannot be used, without showing it to the agent, and goes on', async () => {
+      const { useCaller } = identities();
+      const { store, sent, run, feed } = setup(undefined, { useCaller });
+      await postAs(store, 'bad', 'broken');
+      await post(store, 'fine');
+      await run();
+      expect(sent.map((m) => m.text)).toEqual(['fine']);
+      expect(await feed()).toEqual(['! wasp.message_failed', '> fine', 'run', 'echo:fine', 'done']);
+      expect(await store.pending(T)).toEqual([]);
+    });
+
+    it('never writes a caller token to the feed', async () => {
+      const { useCaller } = identities();
+      const { store, run } = setup(undefined, { useCaller });
+      await postAs(store, 'hello', 'user:1');
+      await run();
+      expect(JSON.stringify(await store.feed(T))).not.toContain('cipher(');
+    });
+
+    it('closes the session when the first delivery throws', async () => {
+      const { store, sent, run } = setup(undefined, {
+        useCaller: async () => {
+          throw new Error('KMS unreachable');
+        }
+      });
+      await postAs(store, 'hello', 'user:1');
+      await expect(run()).rejects.toThrow('KMS unreachable');
+      expect(sent).toEqual([]);
+      expect(await store.leaseHolder(T, now())).toBeNull();
+    });
   });
 });

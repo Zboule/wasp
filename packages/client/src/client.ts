@@ -39,6 +39,13 @@ export type PostOptions = {
   deliver?: Deliver;
   /** The user's token for MCP servers declared `auth: "caller"`. Encrypted before it is stored. */
   callerToken?: string;
+  /**
+   * Who `callerToken` speaks for: an opaque, stable id of your choosing (a user
+   * id, a service account). A running turn keeps the principal it started with:
+   * an `asap` message from another principal waits for the next turn, so a turn
+   * never switches identity halfway through.
+   */
+  principal?: string;
   /** Refs returned by `upload`, once each file is uploaded. A message with files may have no text. */
   files?: string[];
 };
@@ -146,10 +153,11 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
       return { ref, ...(await deps.presignUpload(ref, { mediaType: type, size })) };
     },
 
-    async post(threadId, { text, deliver = 'later', callerToken, files = [] }) {
+    async post(threadId, { text, deliver = 'later', callerToken, principal, files = [] }) {
       checkThread(threadId);
       if (!text.trim() && files.length === 0) throw new Error('wasp: a message needs text or files');
       if (text.length > MAX_TEXT) throw new Error(`wasp: a message is limited to ${MAX_TEXT} characters`);
+      if (principal !== undefined && (!principal || principal.length > 200)) throw new Error('wasp: a principal is 1 to 200 characters');
       const attachments = files.length ? await attach(threadId, files) : [];
       const messageId = crypto.randomUUID();
       await store.enqueue(threadId, {
@@ -158,7 +166,8 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
         deliver,
         createdAt: now(),
         ...(attachments.length ? { attachments } : {}),
-        ...(callerToken ? { callerToken: await deps.encryptToken(threadId, callerToken) } : {})
+        ...(callerToken ? { callerToken: await deps.encryptToken(threadId, callerToken) } : {}),
+        ...(principal ? { principal } : {})
       });
       const position = (await store.pending(threadId)).findIndex((m) => m.id === messageId);
       return { messageId, position };

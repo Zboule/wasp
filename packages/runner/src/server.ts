@@ -2,7 +2,7 @@ import { UUID } from '@zboule/wasp-protocol';
 import { type IncomingMessage, type ServerResponse, createServer } from 'node:http';
 
 import type { Agent } from './agent.ts';
-import { drain } from './drain.ts';
+import { type DrainDeps, drain } from './drain.ts';
 import type { ThreadFiles } from './files.ts';
 import type { ThreadStore } from '@zboule/wasp-store';
 
@@ -22,6 +22,8 @@ export type ThreadRuntime = {
   agent: Agent;
   offload?: (threadId: string, content: string) => Promise<string>;
   files?: ThreadFiles;
+  /** Switches the MCP credential to each delivered message's caller token (see drain). */
+  useCaller?: DrainDeps['useCaller'];
 };
 
 /** Ask for fresh credentials this long before the current ones expire (they last at most an hour). */
