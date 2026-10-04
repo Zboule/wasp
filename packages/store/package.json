@@ -1,0 +1,19 @@
+{
+  "name": "@jorna/wasp-store",
+  "version": "0.0.0",
+  "description": "Where wasp keeps a thread: queue, feed, lease, control (DynamoDB) and transcripts and payloads (S3)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/contract.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1146.0",
+    "@aws-sdk/lib-dynamodb": "^3.1146.0",
+    "@jorna/wasp-protocol": "workspace:*"
+  }
+}

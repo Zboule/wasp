@@ -23,3 +23,27 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+
+  integration:
+    # The stores against DynamoDB Local and an S3-compatible mock: real
+    # conditional writes, cursors, chunked transcripts, no AWS account needed.
+    runs-on: ubuntu-24.04
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports: ['8000:8000']
+      s3:
+        image: adobe/s3mock
+        ports: ['9090:9090']
+    env:
+      WASP_DYNAMODB_ENDPOINT: http://localhost:8000
+      WASP_S3_ENDPOINT: http://localhost:9090
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test

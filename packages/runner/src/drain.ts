@@ -1,6 +1,6 @@
 import type { Agent, AgentSession } from './agent.ts';
 import { toFeedEvents } from './feed.ts';
-import type { StoredMessage, ThreadStore } from './store.ts';
+import type { StoredMessage, ThreadStore } from '@jorna/wasp-store';
 
 export type DrainDeps = {
   store: ThreadStore;

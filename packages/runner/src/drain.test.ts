@@ -2,8 +2,7 @@ import type { Deliver, FeedEntry } from '@jorna/wasp-protocol';
 import { describe, expect, it } from 'vitest';
 
 import { drain } from './drain.ts';
-import { createMemoryStore } from './memoryStore.ts';
-import type { ThreadStore } from './store.ts';
+import { type ThreadStore, createMemoryStore } from '@jorna/wasp-store';
 import { type Script, gate, scriptedAgent } from './testing/scriptedAgent.ts';
 
 const T = 'thread-1';

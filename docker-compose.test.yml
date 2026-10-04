@@ -1,0 +1,10 @@
+# Local stand-ins for AWS, for the integration tests:
+#   docker compose -f docker-compose.test.yml up -d
+#   WASP_DYNAMODB_ENDPOINT=http://localhost:8000 WASP_S3_ENDPOINT=http://localhost:9090 pnpm test
+services:
+  dynamodb:
+    image: amazon/dynamodb-local
+    ports: ['8000:8000']
+  s3:
+    image: adobe/s3mock
+    ports: ['9090:9090']

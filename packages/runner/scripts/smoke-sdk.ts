@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { drain } from '../src/drain.ts';
-import { createMemoryStore } from '../src/memoryStore.ts';
+import { createMemoryStore } from '@jorna/wasp-store';
 import { sdkAgent } from '../src/sdkAgent.ts';
 
 const store = createMemoryStore();
