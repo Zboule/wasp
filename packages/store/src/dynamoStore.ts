@@ -8,7 +8,7 @@ import {
   QueryCommand,
   UpdateCommand
 } from '@aws-sdk/lib-dynamodb';
-import type { FeedEntry, FeedEvent } from '@jorna/wasp-protocol';
+import type { FeedEntry, FeedEvent } from '@zboule/wasp-protocol';
 
 import { type CancelResult, type NewMessage, type StoredMessage, type ThreadStore, orderKey } from './store.ts';
 
@@ -23,6 +23,8 @@ import { type CancelResult, type NewMessage, type StoredMessage, type ThreadStor
  *   T#<thread>    F#<cursor>      feed event
  *   T#<thread>    LEASE           the one runner draining the thread
  *   T#<thread>    CTL#INTERRUPT   a pending interrupt request
+ *   T#<thread>    CTL#WAKE        "start a drain": the stream wakes the runtime
+ *   T#<thread>    CTL#CREDENTIALS "refresh my credentials": the stream sends fresh ones
  */
 export function createDynamoStore({ tableName, client }: { tableName: string; client: DynamoDBDocumentClient }): ThreadStore {
   const pk = (threadId: string) => `T#${threadId}`;
@@ -209,6 +211,14 @@ export function createDynamoStore({ tableName, client }: { tableName: string; cl
     async leaseHolder(threadId, now) {
       const { Item } = await client.send(new GetCommand({ TableName: tableName, Key: { PK: pk(threadId), SK: 'LEASE' }, ConsistentRead: true }));
       return Item && Number(Item.until) > now ? String(Item.owner) : null;
+    },
+
+    async requestWake(threadId, at) {
+      await client.send(new PutCommand({ TableName: tableName, Item: { PK: pk(threadId), SK: 'CTL#WAKE', at } }));
+    },
+
+    async requestCredentials(threadId, at) {
+      await client.send(new PutCommand({ TableName: tableName, Item: { PK: pk(threadId), SK: 'CTL#CREDENTIALS', at } }));
     },
 
     async requestInterrupt(threadId, at) {

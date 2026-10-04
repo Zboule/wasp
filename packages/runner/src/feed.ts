@@ -1,4 +1,4 @@
-import type { FeedEvent } from '@jorna/wasp-protocol';
+import type { FeedEvent } from '@zboule/wasp-protocol';
 
 import type { AgentEvent } from './agent.ts';
 

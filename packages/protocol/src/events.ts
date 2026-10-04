@@ -30,13 +30,20 @@ export type TextMessageContent = { type: 'TEXT_MESSAGE_CONTENT'; messageId: stri
 export type TextMessageEnd = { type: 'TEXT_MESSAGE_END'; messageId: string };
 
 export type ToolCallStart = { type: 'TOOL_CALL_START'; toolCallId: string; toolCallName: string };
-export type ToolCallArgs = { type: 'TOOL_CALL_ARGS'; toolCallId: string; delta: string };
+export type ToolCallArgs = {
+  type: 'TOOL_CALL_ARGS';
+  toolCallId: string;
+  /** The arguments as JSON, or a preview when they were offloaded: see `argsRef`. */
+  delta: string;
+  /** Set when the arguments were too large to keep inline. The client resolves it to a URL. */
+  argsRef?: string;
+};
 export type ToolCallEnd = { type: 'TOOL_CALL_END'; toolCallId: string };
 export type ToolCallResult = {
   type: 'TOOL_CALL_RESULT';
   messageId: string;
   toolCallId: string;
-  /** The full output, or empty when it was offloaded: see `outputRef`. */
+  /** The full output, or a preview when it was offloaded: see `outputRef`. */
   content: string;
   isError?: boolean;
   /** Set when the output was too large (or an image) to keep inline. The client resolves it to a URL. */

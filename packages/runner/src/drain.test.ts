@@ -1,8 +1,8 @@
-import type { Deliver, FeedEntry } from '@jorna/wasp-protocol';
+import type { Deliver, FeedEntry } from '@zboule/wasp-protocol';
 import { describe, expect, it } from 'vitest';
 
 import { drain } from './drain.ts';
-import { type ThreadStore, createMemoryStore } from '@jorna/wasp-store';
+import { type ThreadStore, createMemoryStore } from '@zboule/wasp-store';
 import { type Script, gate, scriptedAgent } from './testing/scriptedAgent.ts';
 
 const T = 'thread-1';
@@ -178,6 +178,30 @@ describe('drain', () => {
     slow.open();
     await draining;
     expect((await feed()).filter((line) => line === 'run')).toHaveLength(2);
+  });
+
+  it('ignores an interrupt asked for while nothing ran', async () => {
+    const { store, run, feed } = setup();
+    await store.requestInterrupt(T, now());
+    await post(store, 'hello');
+    await run();
+    expect(await feed()).toEqual(['> hello', 'run', 'echo:hello', 'done']);
+  });
+
+  it('moves an oversized tool result out of the feed, keeping a preview and a reference', async () => {
+    const store = createMemoryStore();
+    const big = 'x'.repeat(200_000);
+    const { agent } = scriptedAgent(() => [{ tool: 'scrape', output: big }]);
+    const offloaded: string[] = [];
+    await post(store, 'scrape it');
+    await drain(T, {
+      store, agent, owner: 'r', now, pollMs: 2,
+      offload: async (_thread, content) => { offloaded.push(content); return 'payloads/thread-1/ref-1'; }
+    });
+    const result = (await store.feed(T)).map((e) => e.event).find((e) => e.type === 'TOOL_CALL_RESULT');
+    expect(offloaded).toEqual([big]);
+    expect(result).toMatchObject({ outputRef: 'payloads/thread-1/ref-1' });
+    expect(result?.type === 'TOOL_CALL_RESULT' && result.content.length).toBeLessThan(3_000);
   });
 
   it('lets one runner drain at a time, and another take over an expired lease', async () => {

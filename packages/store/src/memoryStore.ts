@@ -1,4 +1,4 @@
-import type { FeedEntry, FeedEvent } from '@jorna/wasp-protocol';
+import type { FeedEntry, FeedEvent } from '@zboule/wasp-protocol';
 
 import { type CancelResult, type NewMessage, type StoredMessage, type ThreadStore, orderKey } from './store.ts';
 
@@ -8,18 +8,20 @@ type Thread = {
   lease: { owner: string; until: number } | null;
   interrupt: boolean;
   seq: number;
+  signals: { wake: number; credentials: number };
 };
 
-/** For tests and local development. Semantics match the DynamoDB store. */
-export function createMemoryStore(): ThreadStore {
+/** For tests and local development. Semantics match the DynamoDB store. `signals` counts wake/credential requests. */
+export function createMemoryStore(): ThreadStore & { signals(threadId: string): { wake: number; credentials: number } } {
   const threads = new Map<string, Thread>();
   const thread = (id: string): Thread => {
     let t = threads.get(id);
-    if (!t) threads.set(id, (t = { queue: new Map(), feed: [], lease: null, interrupt: false, seq: 0 }));
+    if (!t) threads.set(id, (t = { queue: new Map(), feed: [], lease: null, interrupt: false, seq: 0, signals: { wake: 0, credentials: 0 } }));
     return t;
   };
 
   return {
+    signals: (threadId: string) => ({ ...thread(threadId).signals }),
     async enqueue(threadId, message: NewMessage) {
       const stored = { ...message, order: orderKey(message.deliver, message.createdAt, message.id) };
       thread(threadId).queue.set(message.id, { ...stored, delivered: false });
@@ -76,6 +78,12 @@ export function createMemoryStore(): ThreadStore {
     async leaseHolder(threadId, now) {
       const lease = thread(threadId).lease;
       return lease && lease.until > now ? lease.owner : null;
+    },
+    async requestWake(threadId) {
+      thread(threadId).signals.wake++;
+    },
+    async requestCredentials(threadId) {
+      thread(threadId).signals.credentials++;
     },
     async requestInterrupt(threadId) {
       thread(threadId).interrupt = true;

@@ -1,5 +1,5 @@
 {
-  "name": "@jorna/wasp-protocol",
+  "name": "@zboule/wasp-protocol",
   "version": "0.0.0",
   "description": "The contracts between the wasp runner, client and UI: AG-UI feed events, queue and thread state",
   "type": "module",

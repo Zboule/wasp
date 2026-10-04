@@ -2,7 +2,7 @@ import { type IncomingMessage, type ServerResponse, createServer } from 'node:ht
 
 import type { Agent } from './agent.ts';
 import { drain } from './drain.ts';
-import type { ThreadStore } from '@jorna/wasp-store';
+import type { ThreadStore } from '@zboule/wasp-store';
 
 /** Thread-scoped temporary AWS credentials, minted by the waker outside the microVM. */
 export type ThreadCredentials = { accessKeyId: string; secretAccessKey: string; sessionToken: string; expiration: string };
@@ -15,7 +15,10 @@ export type Invocation =
   | { op: 'refresh'; threadId: string; credentials: ThreadCredentials };
 
 /** What one drain needs, built from the credentials the waker handed in. Never from the microVM's own role. */
-export type ThreadRuntime = { store: ThreadStore; agent: Agent };
+export type ThreadRuntime = { store: ThreadStore; agent: Agent; offload?: (threadId: string, content: string) => Promise<string> };
+
+/** Ask for fresh credentials this long before the current ones expire (they last at most an hour). */
+const REFRESH_BEFORE_MS = 10 * 60_000;
 
 export type RunnerServerDeps = {
   /** Builds the store and agent for one thread. `credentials()` always returns the latest refreshed set. */
@@ -72,7 +75,14 @@ export function createRunnerServer(deps: RunnerServerDeps) {
     if (invocation.op === 'refresh') return json(res, 200, { refreshed: true });
     if (!draining) {
       const runtime = deps.forThread(threadId, () => credentials!, invocation.claude);
-      draining = drain(threadId, { ...runtime, owner: deps.owner, ...(deps.pollMs ? { pollMs: deps.pollMs } : {}) })
+      let requestedFor: string | null = null;
+      const onTick = async () => {
+        const expiry = credentials!.expiration;
+        if (requestedFor === expiry || Date.parse(expiry) - Date.now() > REFRESH_BEFORE_MS) return;
+        requestedFor = expiry;
+        await runtime.store.requestCredentials(threadId, Date.now());
+      };
+      draining = drain(threadId, { ...runtime, owner: deps.owner, onTick, ...(deps.pollMs ? { pollMs: deps.pollMs } : {}) })
         .then((outcome) => log(`drain ${threadId}: ${outcome}`))
         .catch((error: unknown) => log(`drain ${threadId} failed: ${error instanceof Error ? error.message : String(error)}`))
         .finally(() => (draining = null));

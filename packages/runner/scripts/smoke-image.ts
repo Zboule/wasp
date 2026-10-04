@@ -3,13 +3,13 @@
  * DynamoDB Local + S3Mock standing in for AWS.
  *
  *   docker compose -f docker-compose.test.yml up -d
- *   pnpm --filter @jorna/wasp-runner image
+ *   pnpm --filter @zboule/wasp-runner image
  *   CLAUDE_CODE_OAUTH_TOKEN=… node packages/runner/scripts/smoke-image.ts
  */
 import { CreateTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { CreateBucketCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { createDynamoStore } from '@jorna/wasp-store';
+import { createDynamoStore } from '@zboule/wasp-store';
 import { execFileSync } from 'node:child_process';
 
 const local = { region: 'eu-west-1', credentials: { accessKeyId: 'local', secretAccessKey: 'local' } };

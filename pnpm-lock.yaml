@@ -34,10 +34,10 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.1146.0
         version: 3.1146.0(@aws-sdk/client-dynamodb@3.1146.0)
-      '@jorna/wasp-protocol':
+      '@zboule/wasp-protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@jorna/wasp-store':
+      '@zboule/wasp-store':
         specifier: workspace:*
         version: link:../store
     devDependencies:
@@ -53,7 +53,7 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.1146.0
         version: 3.1146.0(@aws-sdk/client-dynamodb@3.1146.0)
-      '@jorna/wasp-protocol':
+      '@zboule/wasp-protocol':
         specifier: workspace:*
         version: link:../protocol
 

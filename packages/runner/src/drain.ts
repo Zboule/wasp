@@ -1,6 +1,8 @@
+import type { FeedEvent } from '@zboule/wasp-protocol';
+
 import type { Agent, AgentSession } from './agent.ts';
 import { toFeedEvents } from './feed.ts';
-import type { StoredMessage, ThreadStore } from '@jorna/wasp-store';
+import type { StoredMessage, ThreadStore } from '@zboule/wasp-store';
 
 export type DrainDeps = {
   store: ThreadStore;
@@ -13,7 +15,15 @@ export type DrainDeps = {
   leaseMs?: number;
   /** How often a running turn looks for asap/now messages and interrupt requests. */
   pollMs?: number;
+  /** Stores a payload too large for the feed and returns its reference. Without it, payloads are truncated. */
+  offload?: (threadId: string, content: string) => Promise<string>;
+  /** Runs on every tick of a session, e.g. to ask for fresh credentials before they expire. */
+  onTick?: () => Promise<void>;
 };
+
+/** Feed items stay well under DynamoDB's 400 KB item limit. */
+export const INLINE_LIMIT = 64 * 1024;
+const PREVIEW_LENGTH = 2_000;
 
 /**
  * Drains a thread's queue: delivers its messages to the agent in order, writes
@@ -53,6 +63,8 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
 
   const first = (await store.pending(threadId))[0];
   if (!first) return;
+  // An interrupt asked for while nothing ran must not kill this session's first turn.
+  await store.takeInterrupt(threadId);
   const session = await agent.open(threadId);
 
   let running = false;
@@ -88,6 +100,7 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
 
   const tick = () =>
     serial(async () => {
+      await deps.onTick?.();
       if (!(await store.renewLease(threadId, owner, now() + leaseMs))) {
         // Another runner took the thread over: stop writing to it.
         await interrupt(session);
@@ -109,6 +122,17 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
       }
     });
 
+  /** Moves an oversized tool result or argument payload out of the feed. */
+  async function fitInline(event: FeedEvent): Promise<FeedEvent> {
+    if (event.type !== 'TOOL_CALL_RESULT' && event.type !== 'TOOL_CALL_ARGS') return event;
+    const payload = event.type === 'TOOL_CALL_RESULT' ? event.content : event.delta;
+    if (payload.length <= INLINE_LIMIT) return event;
+    const preview = `${payload.slice(0, PREVIEW_LENGTH)}… [${payload.length} characters]`;
+    const ref = deps.offload ? await deps.offload(threadId, payload) : undefined;
+    if (event.type === 'TOOL_CALL_RESULT') return { ...event, content: preview, ...(ref ? { outputRef: ref } : {}) };
+    return { ...event, delta: preview, ...(ref ? { argsRef: ref } : {}) };
+  }
+
   async function interrupt(s: AgentSession) {
     if (interrupting || !running) return;
     interrupting = true;
@@ -126,7 +150,7 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
           running = true;
           runId = newId();
         }
-        await store.append(threadId, toFeedEvents(event, { threadId, runId, newId }), now());
+        await store.append(threadId, await Promise.all(toFeedEvents(event, { threadId, runId, newId }).map(fitInline)), now());
         if (event.type === 'turn_end') {
           running = false;
           interrupting = false;

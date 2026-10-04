@@ -1,4 +1,4 @@
-import type { Deliver, FeedEntry, FeedEvent, QueuedMessage } from '@jorna/wasp-protocol';
+import type { Deliver, FeedEntry, FeedEvent, QueuedMessage } from '@zboule/wasp-protocol';
 
 /** A queued message as stored: what the app sees, plus what only the runner needs. */
 export type StoredMessage = QueuedMessage & {
@@ -34,6 +34,11 @@ export interface ThreadStore {
   renewLease(threadId: string, owner: string, until: number): Promise<boolean>;
   releaseLease(threadId: string, owner: string): Promise<void>;
   leaseHolder(threadId: string, now: number): Promise<string | null>;
+
+  /** Asks the waker to (re)start a drain: how a stalled thread is picked up again. */
+  requestWake(threadId: string, at: number): Promise<void>;
+  /** Asks the waker for fresh thread-scoped credentials before the current ones expire. */
+  requestCredentials(threadId: string, at: number): Promise<void>;
 
   requestInterrupt(threadId: string, at: number): Promise<void>;
   /** Consumes a pending interrupt request, if any. */

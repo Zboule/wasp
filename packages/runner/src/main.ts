@@ -1,7 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { S3Client } from '@aws-sdk/client-s3';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { createDynamoStore } from '@jorna/wasp-store';
+import { createDynamoStore } from '@zboule/wasp-store';
 import { readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 
@@ -43,6 +43,11 @@ const server = createRunnerServer({
     });
     return {
       store: createDynamoStore({ tableName, client: DynamoDBDocumentClient.from(dynamo, { marshallOptions: { removeUndefinedValues: true } }) }),
+      async offload(thread, content) {
+        const key = `payloads/${thread}/${crypto.randomUUID()}.txt`;
+        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: content, ContentType: 'text/plain; charset=utf-8' }));
+        return key;
+      },
       agent: sdkAgent({
         model: env('WASP_MODEL', 'claude-sonnet-5-5'),
         workDir: env('WASP_WORK_DIR', '/work'),

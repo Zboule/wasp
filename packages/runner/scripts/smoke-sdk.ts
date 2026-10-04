@@ -2,13 +2,13 @@
  * The drain loop against the real Agent SDK and model, with an in-memory store.
  *   CLAUDE_CODE_OAUTH_TOKEN=… node packages/runner/scripts/smoke-sdk.ts
  */
-import type { Deliver, FeedEntry } from '@jorna/wasp-protocol';
+import type { Deliver, FeedEntry } from '@zboule/wasp-protocol';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { drain } from '../src/drain.ts';
-import { createMemoryStore } from '@jorna/wasp-store';
+import { createMemoryStore } from '@zboule/wasp-store';
 import { sdkAgent } from '../src/sdkAgent.ts';
 
 const store = createMemoryStore();

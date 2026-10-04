@@ -92,6 +92,14 @@ export function storeContract(name: string, makeStore: () => Promise<ThreadStore
       expect(await store.takeInterrupt(t)).toBe(false);
     });
 
+    it('accepts wake and credential requests any number of times', async () => {
+      const store = await makeStore();
+      const t = thread();
+      await store.requestWake(t, 1);
+      await store.requestWake(t, 2);
+      await store.requestCredentials(t, 3);
+    });
+
     it('keeps threads apart, and deletes one completely', async () => {
       const store = await makeStore();
       const [t1, t2] = [thread(), thread()];

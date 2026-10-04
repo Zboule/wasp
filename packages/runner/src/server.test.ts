@@ -1,4 +1,4 @@
-import { createMemoryStore } from '@jorna/wasp-store';
+import { createMemoryStore } from '@zboule/wasp-store';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -74,6 +74,18 @@ describe('runner server', () => {
     await store.enqueue(first, { id: 'm1', text: 'hi', deliver: 'later', createdAt: 1 });
     expect((await invoke(first, { op: 'drain' })).status).toBe(202);
     expect((await invoke(crypto.randomUUID(), { op: 'drain' })).status).toBe(409);
+  });
+
+  it('asks for fresh credentials shortly before they expire', async () => {
+    const { store, slow, invoke } = await start();
+    const thread = crypto.randomUUID();
+    await store.enqueue(thread, { id: 'm1', text: 'slow', deliver: 'later', createdAt: 1 });
+    const expiring = { ...credentials, expiration: new Date(Date.now() + 60_000).toISOString() };
+    await invoke(thread, { op: 'drain', credentials: expiring });
+    await until(async () => store.signals(thread).credentials === 1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(store.signals(thread).credentials).toBe(1);
+    slow.open();
   });
 
   it('builds storage only from the credentials the waker sent, and takes refreshed ones', async () => {
