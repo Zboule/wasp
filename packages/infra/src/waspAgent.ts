@@ -228,7 +228,8 @@ export class WaspAgent extends $util.ComponentResource {
       {
         // Create-only, [A-Za-z][A-Za-z0-9_]{0,47}: changing it replaces the runtime.
         agentRuntimeName: `${$app.name}_${$app.stage}_${name}`.replace(/[^A-Za-z0-9_]/g, '_').replace(/^[^A-Za-z]/, 'w').slice(0, 48),
-        agentRuntimeArtifact: { containerConfiguration: { containerUri: image.ref } },
+        // `repo@sha256:…`, not docker-build's `ref` (`repo:tag@sha256:…`), which AgentCore does not start.
+        agentRuntimeArtifact: { containerConfiguration: { containerUri: $interpolate`${repository.repositoryUrl}@${image.digest}` } },
         roleArn: runtimeRole.arn,
         networkConfiguration: { networkMode: 'PUBLIC' },
         protocolConfiguration: 'HTTP',

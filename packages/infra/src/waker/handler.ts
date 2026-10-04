@@ -58,10 +58,14 @@ export async function handler(event: DynamoDBStreamEvent): Promise<void> {
         );
         return out.statusCode ?? 200;
       } catch (error) {
-        // The runtime's own refusals (400/409) come back as RuntimeClientError 424.
+        // AgentCore wraps everything the container answers in a 424. Only the
+        // runner's own refusals ("Received error (409) from runtime": another
+        // thread) are final; a failed health check or a crash must be retried.
+        const message = error instanceof Error ? error.message : String(error);
         const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode ?? 500;
-        console.error(`wasp waker: invoke ${threadId} failed (${status}): ${error instanceof Error ? error.message : String(error)}`);
-        return status === 424 ? 409 : status;
+        console.error(`wasp waker: invoke ${threadId} failed (${status}): ${message}`);
+        if (status === 424) return /\((400|409)\) from runtime/.test(message) ? 409 : 503;
+        return status;
       }
     }
   });
