@@ -5,8 +5,10 @@ import {
   type FeedEvent,
   type FeedPage,
   type ThreadStore,
+  UUID,
   type WaspFile,
   fileRef,
+  isPayloadRef,
   parseFileRef,
   threadState
 } from '@zboule/wasp-protocol';
@@ -18,8 +20,8 @@ export type WaspClientDeps = {
   encryptToken(threadId: string, token: string): Promise<string>;
   /** Turns a stored payload reference (`payloads/<threadId>/…`) into a short-lived URL; with `download`, one that saves the file under that name. */
   presign(ref: string, options?: { download?: string }): Promise<string>;
-  /** A short-lived S3 POST that accepts exactly one object at `ref`, of this type and at most `maxBytes`. */
-  presignUpload(ref: string, options: { mediaType: string; maxBytes: number }): Promise<{ url: string; fields: Record<string, string> }>;
+  /** A short-lived S3 POST that accepts exactly one object at `ref`, of this type and exactly `size` bytes. */
+  presignUpload(ref: string, options: { mediaType: string; size: number }): Promise<{ url: string; fields: Record<string, string> }>;
   /** What S3 holds at `ref`, or null when nothing was uploaded there. */
   headObject(ref: string): Promise<{ size: number; mediaType: string } | null>;
   limits?: Partial<FileLimits>;
@@ -55,7 +57,6 @@ export interface WaspClient {
   deleteThread(threadId: string): Promise<void>;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_TEXT = 100_000;
 const MEDIA_TYPE = /^[\w.+-]+\/[\w.+-]+$/;
 /** A queue left waiting this long with no runner is woken again. */
@@ -74,8 +75,23 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
     if (!UUID.test(threadId)) throw new Error('wasp: a thread id must be a UUID');
   };
 
-  const withUrls = (files: WaspFile[] | undefined) =>
-    files && Promise.all(files.map(async (f) => ({ ...f, url: await deps.presign(f.ref, { download: f.name }) })));
+  /**
+   * Refs in the queue and the feed are agent-writable, and the app's role can
+   * read the whole bucket: only this thread's objects get a URL, or an agent
+   * could plant a ref that hands its user another thread's transcript.
+   */
+  const payloadUrl = (threadId: string, ref: string) => (isPayloadRef(threadId, ref) ? deps.presign(ref) : undefined);
+
+  /** Id and name come from the ref, which is what the URL serves. A ref that is not this thread's file is dropped. */
+  const withUrls = async (threadId: string, files: WaspFile[]): Promise<WaspFile[]> =>
+    (
+      await Promise.all(
+        files.map(async (file) => {
+          const parsed = parseFileRef(threadId, file.ref);
+          return parsed ? { ...file, ...parsed, url: await deps.presign(file.ref, { download: parsed.name }) } : null;
+        })
+      )
+    ).filter((file) => file !== null);
 
   /** Size and type come from what S3 holds, not from what the caller claimed at upload. */
   const attach = async (threadId: string, refs: string[]): Promise<WaspFile[]> => {
@@ -92,13 +108,21 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
     );
   };
 
-  const resolveRefs = async (entry: FeedEntry): Promise<FeedEntry> => {
+  const resolveRefs = async (threadId: string, entry: FeedEntry): Promise<FeedEntry> => {
     const event: FeedEvent = entry.event;
     if (event.type === 'CUSTOM' && event.name === 'wasp.message' && event.value.attachments) {
-      return { ...entry, event: { ...event, value: { ...event.value, attachments: await withUrls(event.value.attachments) } } };
+      return { ...entry, event: { ...event, value: { ...event.value, attachments: await withUrls(threadId, event.value.attachments) } } };
     }
-    if (event.type === 'TOOL_CALL_RESULT' && event.outputRef) return { ...entry, event: { ...event, outputRef: await deps.presign(event.outputRef) } };
-    if (event.type === 'TOOL_CALL_ARGS' && event.argsRef) return { ...entry, event: { ...event, argsRef: await deps.presign(event.argsRef) } };
+    if (event.type === 'TOOL_CALL_RESULT' && event.outputRef) {
+      const { outputRef, ...rest } = event;
+      const url = await payloadUrl(threadId, outputRef);
+      return { ...entry, event: url ? { ...rest, outputRef: url } : rest };
+    }
+    if (event.type === 'TOOL_CALL_ARGS' && event.argsRef) {
+      const { argsRef, ...rest } = event;
+      const url = await payloadUrl(threadId, argsRef);
+      return { ...entry, event: url ? { ...rest, argsRef: url } : rest };
+    }
     return entry;
   };
 
@@ -109,7 +133,7 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
       if (size > limits.maxFileBytes) throw new Error(`wasp: a file is limited to ${limits.maxFileBytes} bytes`);
       const type = mediaType && MEDIA_TYPE.test(mediaType) ? mediaType.toLowerCase() : 'application/octet-stream';
       const ref = fileRef(threadId, crypto.randomUUID(), name);
-      return { ref, ...(await deps.presignUpload(ref, { mediaType: type, maxBytes: limits.maxFileBytes })) };
+      return { ref, ...(await deps.presignUpload(ref, { mediaType: type, size })) };
     },
 
     async post(threadId, { text, deliver = 'later', callerToken, files = [] }) {
@@ -150,10 +174,10 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
             text,
             deliver,
             createdAt,
-            ...(attachments ? { attachments: await withUrls(attachments) } : {})
+            ...(attachments ? { attachments: await withUrls(threadId, attachments) } : {})
           }))
         ),
-        entries: await Promise.all(entries.map(resolveRefs)),
+        entries: await Promise.all(entries.map((entry) => resolveRefs(threadId, entry))),
         cursor: entries.at(-1)?.cursor ?? after
       };
     },

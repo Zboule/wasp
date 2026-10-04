@@ -224,34 +224,21 @@ describe('drain', () => {
     expect((await feed()).slice(-3)).toEqual(['tool:work', 'tool-ok', 'done']);
   });
 
-  describe('attachments', () => {
+  it('restores the thread’s files when it opens, and fetches a message’s files before claiming it', async () => {
     const file = { id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', name: 'q3.pdf', mediaType: 'application/pdf', size: 2_200_000, ref: 'payloads/x/files/f/q3.pdf' };
+    const store = createMemoryStore();
+    const { agent, sent } = scriptedAgent();
+    const order: string[] = [];
+    const claim = store.claim.bind(store);
+    store.claim = async (...args) => (order.push('claim'), claim(...args));
+    await store.enqueue(T, { id: 'm-1', text: 'summarise this', deliver: 'later', createdAt: now(), attachments: [file] });
 
-    it('puts the files in place before the agent gets the message, and tells it where they are', async () => {
-      const store = createMemoryStore();
-      const { agent, sent } = scriptedAgent();
-      const order: string[] = [];
-      const claim = store.claim.bind(store);
-      store.claim = async (...args) => (order.push('claim'), claim(...args));
-      await store.enqueue(T, { id: 'm-1', text: 'summarise this', deliver: 'later', createdAt: now(), attachments: [file] });
+    const files = { restoreAll: async () => void order.push('restore'), fetch: async (f: { name: string }[]) => void order.push(`fetch:${f.map((x) => x.name)}`) };
+    await drain(T, { store, agent, owner: 'r', now, pollMs: 2, files });
 
-      await drain(T, { store, agent, owner: 'r', now, pollMs: 2, syncFiles: async () => void order.push('sync') });
-
-      expect(order).toEqual(['sync', 'sync', 'claim']);
-      expect(sent[0]?.text).toBe(`summarise this\n\n[The user attached a file, in your working directory:\n- files/${file.id}/q3.pdf (application/pdf, 2.1 MB)]`);
-      const delivered = (await store.feed(T)).map((e) => e.event).find((e) => e.type === 'CUSTOM');
-      expect(delivered).toMatchObject({ value: { text: 'summarise this', attachments: [file] } });
-    });
-
-    it('still delivers the message when the files cannot be fetched', async () => {
-      const store = createMemoryStore();
-      const { agent, sent } = scriptedAgent();
-      await store.enqueue(T, { id: 'm-1', text: '', deliver: 'later', createdAt: now(), attachments: [file] });
-
-      expect(await drain(T, { store, agent, owner: 'r', now, pollMs: 2, syncFiles: async () => { throw new Error('AccessDenied'); } })).toBe('drained');
-
-      expect(sent[0]?.text).toBe(`[The user attached a file, in your working directory:\n- files/${file.id}/q3.pdf (application/pdf, 2.1 MB)]`);
-      expect(await store.pending(T)).toEqual([]);
-    });
+    expect(order).toEqual(['restore', 'fetch:q3.pdf', 'claim']);
+    expect(sent[0]?.text).toBe(`summarise this\n\n[The user attached a file, in your working directory:\n- files/${file.id}/q3.pdf (application/pdf, 2.1 MB)]`);
+    const delivered = (await store.feed(T)).map((e) => e.event).find((e) => e.type === 'CUSTOM');
+    expect(delivered).toMatchObject({ value: { text: 'summarise this', attachments: [file] } });
   });
 });

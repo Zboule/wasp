@@ -1,7 +1,9 @@
+import { UUID } from '@zboule/wasp-protocol';
 import { type IncomingMessage, type ServerResponse, createServer } from 'node:http';
 
 import type { Agent } from './agent.ts';
 import { drain } from './drain.ts';
+import type { ThreadFiles } from './files.ts';
 import type { ThreadStore } from '@zboule/wasp-store';
 
 /** Thread-scoped temporary AWS credentials, minted by the waker outside the microVM. */
@@ -19,7 +21,7 @@ export type ThreadRuntime = {
   store: ThreadStore;
   agent: Agent;
   offload?: (threadId: string, content: string) => Promise<string>;
-  syncFiles?: (threadId: string) => Promise<void>;
+  files?: ThreadFiles;
 };
 
 /** Ask for fresh credentials this long before the current ones expire (they last at most an hour). */
@@ -34,7 +36,6 @@ export type RunnerServerDeps = {
 };
 
 const SESSION_HEADER = 'x-amzn-bedrock-agentcore-runtime-session-id';
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The AgentCore Runtime container contract:

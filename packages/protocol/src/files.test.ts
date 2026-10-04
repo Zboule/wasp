@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fileRef, parseFileRef, safeFileName } from './files.ts';
+import { fileRef, isPayloadRef, parseFileRef, safeFileName } from './files.ts';
 
 const T = '11111111-2222-4333-8444-555555555555';
 const F = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -17,6 +17,12 @@ describe('file refs', () => {
     expect(safeFileName('.env')).toBe('env');
     expect(safeFileName('a\u0000b\nc')).toBe('a_b_c');
     expect(safeFileName('...')).toBe('file');
+  });
+
+  it('always yields a name its own ref accepts, even cut at the limit inside non-BMP letters', () => {
+    for (const name of [`${'𝒜'.repeat(200)}.txt`, '𝒜'.repeat(300), `${'é'.repeat(127)}𝒜𝒜`, '\u{1F600}.png', '', ' . ']) {
+      expect(parseFileRef(T, fileRef(T, F, name)), name).not.toBeNull();
+    }
   });
 
   it('round-trips a ref for its own thread only', () => {
@@ -36,5 +42,12 @@ describe('file refs', () => {
     ]) {
       expect(parseFileRef(T, ref)).toBeNull();
     }
+  });
+
+  it('recognises this thread’s payloads only', () => {
+    expect(isPayloadRef(T, `payloads/${T}/${F}.txt`)).toBe(true);
+    expect(isPayloadRef(T, `payloads/${T}/../99999999-2222-4333-8444-555555555555/x.txt`)).toBe(false);
+    expect(isPayloadRef(T, `sessions/${T}/x.jsonl`)).toBe(false);
+    expect(isPayloadRef(T, `payloads/99999999-2222-4333-8444-555555555555/x.txt`)).toBe(false);
   });
 });

@@ -42,12 +42,12 @@ export function createWaspClient(resource: WaspResource, options: { limits?: Par
         }),
         { expiresIn: 900 }
       ),
-    presignUpload: (ref, { mediaType, maxBytes }) =>
+    presignUpload: (ref, { mediaType, size }) =>
       createPresignedPost(s3, {
         Bucket: resource.bucketName,
         Key: ref,
         Conditions: [
-          ['content-length-range', 0, maxBytes],
+          ['content-length-range', size, size],
           ['eq', '$Content-Type', mediaType]
         ],
         Fields: { 'Content-Type': mediaType },

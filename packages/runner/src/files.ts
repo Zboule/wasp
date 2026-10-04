@@ -4,35 +4,24 @@ import { existsSync } from 'node:fs';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+/**
+ * A thread's uploaded files, in the agent's working directory. Neither method
+ * throws: a file that cannot be fetched is logged and skipped, and the message
+ * still reaches the agent, which finds the file missing.
+ */
+export type ThreadFiles = {
+  /** Every file of the thread not on disk yet: a recycled microVM starts empty while the transcript still names them. */
+  restoreAll(): Promise<void>;
+  /** These files, before the agent reads the message that attaches them. */
+  fetch(files: WaspFile[]): Promise<void>;
+};
+
 /** Where a file sits, relative to the thread's working directory (the agent's cwd). */
 export function localFilePath(file: Pick<WaspFile, 'id' | 'name'>): string {
   return `files/${file.id}/${file.name}`;
 }
 
-/** The message as the agent reads it: the user's text, then where each attached file is. */
-export function messageForAgent(text: string, attachments: WaspFile[] = []): string {
-  if (attachments.length === 0) return text;
-  const lines = attachments.map((f) => `- ${localFilePath(f)} (${f.mediaType}, ${formatSize(f.size)})`);
-  const note = `[The user attached ${attachments.length === 1 ? 'a file' : `${attachments.length} files`}, in your working directory:\n${lines.join('\n')}]`;
-  return text.trim() ? `${text}\n\n${note}` : note;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-/**
- * Copies the thread's files from S3 into `<dir>/files/` when they are not there
- * yet. A recycled microVM starts empty while the transcript still names those
- * paths, so this runs when a session opens as well as before a delivery.
- *
- * Keys come from a prefix the agent can write to, so only those `parseFileRef`
- * accepts become paths. A file that fails to download is logged and skipped:
- * the message still reaches the agent, which finds the file missing.
- */
-export function createS3FileSync({
+export function createS3Files({
   client,
   bucket,
   threadId,
@@ -44,7 +33,27 @@ export function createS3FileSync({
   threadId: string;
   dir: string;
   log?: (message: string) => void;
-}): () => Promise<void> {
+}): ThreadFiles {
+  const report = (what: string, error: unknown) => log(`files ${threadId}: ${what}: ${error instanceof Error ? error.message : String(error)}`);
+
+  async function download(ref: string): Promise<void> {
+    // Only refs shaped like a file become paths. The agent could write other keys
+    // under its own prefix; that harms nobody else, but they are not files to place.
+    const file = parseFileRef(threadId, ref);
+    if (!file) return;
+    const target = path.join(dir, localFilePath(file));
+    if (existsSync(target)) return;
+    try {
+      const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: ref }));
+      await mkdir(path.dirname(target), { recursive: true });
+      // Written aside then renamed, so an interrupted download never looks complete.
+      await writeFile(`${target}.part`, await out.Body!.transformToByteArray());
+      await rename(`${target}.part`, target);
+    } catch (error) {
+      report(ref, error);
+    }
+  }
+
   async function list(): Promise<string[]> {
     const keys: string[] = [];
     let token: string | undefined;
@@ -56,21 +65,16 @@ export function createS3FileSync({
     return keys;
   }
 
-  return async () => {
-    for (const key of await list()) {
-      const file = parseFileRef(threadId, key);
-      if (!file) continue;
-      const target = path.join(dir, localFilePath(file));
-      if (existsSync(target)) continue;
+  return {
+    async restoreAll() {
       try {
-        const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-        await mkdir(path.dirname(target), { recursive: true });
-        // Written aside then renamed, so an interrupted download never looks complete.
-        await writeFile(`${target}.part`, await out.Body!.transformToByteArray());
-        await rename(`${target}.part`, target);
+        await Promise.all((await list()).map(download));
       } catch (error) {
-        log(`file ${key}: ${error instanceof Error ? error.message : String(error)}`);
+        report('list', error);
       }
+    },
+    async fetch(files) {
+      await Promise.all(files.map((file) => download(file.ref)));
     }
   };
 }

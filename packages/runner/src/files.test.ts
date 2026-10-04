@@ -5,23 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { createS3FileSync, messageForAgent } from './files.ts';
-
-describe('messageForAgent', () => {
-  it('leaves a message without files as it is', () => {
-    expect(messageForAgent('hi')).toBe('hi');
-  });
-
-  it('lists every file under files/<id>/<name>', () => {
-    const files = [
-      { id: 'a', name: 'notes.txt', mediaType: 'text/plain', size: 12, ref: '' },
-      { id: 'b', name: 'big.csv', mediaType: 'text/csv', size: 40_000, ref: '' }
-    ];
-    expect(messageForAgent('', files)).toBe(
-      '[The user attached 2 files, in your working directory:\n- files/a/notes.txt (text/plain, 12 B)\n- files/b/big.csv (text/csv, 39.1 KB)]'
-    );
-  });
-});
+import { createS3Files } from './files.ts';
 
 /** Integration: runs against an S3-compatible server when WASP_S3_ENDPOINT is set (`docker compose -f docker-compose.test.yml up`; CI's integration job). */
 const endpoint = process.env.WASP_S3_ENDPOINT;
@@ -45,18 +29,44 @@ const endpoint = process.env.WASP_S3_ENDPOINT;
     const fileId = crypto.randomUUID();
     await put(fileRef(threadId, fileId, 'notes.txt'), 'hello');
     const dir = mkdtempSync(path.join(tmpdir(), 'wasp-files-'));
-    const sync = createS3FileSync({ client, bucket, threadId, dir });
+    const files = createS3Files({ client, bucket, threadId, dir });
 
-    await sync();
+    await files.restoreAll();
     const local = path.join(dir, 'files', fileId, 'notes.txt');
     expect(readFileSync(local, 'utf8')).toBe('hello');
 
     await put(fileRef(threadId, fileId, 'notes.txt'), 'changed in S3');
-    await sync();
+    await files.restoreAll();
     expect(readFileSync(local, 'utf8')).toBe('hello');
   });
 
-  it('ignores keys that are not files of this thread, including ones that would leave the directory', async () => {
+  it('fetches only the files it is given', async () => {
+    const threadId = crypto.randomUUID();
+    const [wanted, other] = [crypto.randomUUID(), crypto.randomUUID()];
+    await put(fileRef(threadId, wanted, 'a.txt'), 'a');
+    await put(fileRef(threadId, other, 'b.txt'), 'b');
+    const dir = mkdtempSync(path.join(tmpdir(), 'wasp-files-'));
+
+    await createS3Files({ client, bucket, threadId, dir }).fetch([{ id: wanted, name: 'a.txt', mediaType: 'text/plain', size: 1, ref: fileRef(threadId, wanted, 'a.txt') }]);
+
+    expect(existsSync(path.join(dir, 'files', wanted, 'a.txt'))).toBe(true);
+    expect(existsSync(path.join(dir, 'files', other))).toBe(false);
+  });
+
+  it('logs what it cannot fetch instead of throwing', async () => {
+    const threadId = crypto.randomUUID();
+    const fileId = crypto.randomUUID();
+    const dir = mkdtempSync(path.join(tmpdir(), 'wasp-files-'));
+    const logged: string[] = [];
+    const missing = { id: fileId, name: 'gone.txt', mediaType: 'text/plain', size: 1, ref: fileRef(threadId, fileId, 'gone.txt') };
+
+    await createS3Files({ client, bucket, threadId, dir, log: (m) => logged.push(m) }).fetch([missing]);
+    await createS3Files({ client, bucket: 'no-such-bucket', threadId, dir, log: (m) => logged.push(m) }).restoreAll();
+
+    expect(logged).toEqual([expect.stringContaining('gone.txt'), expect.stringContaining(': list: ')]);
+  });
+
+  it('places only keys shaped like files, never outside its directory', async () => {
     const threadId = crypto.randomUUID();
     const fileId = crypto.randomUUID();
     await put(`payloads/${threadId}/files/${fileId}/../../escaped.txt`, 'x');
@@ -65,7 +75,7 @@ const endpoint = process.env.WASP_S3_ENDPOINT;
     const dir = mkdtempSync(path.join(tmpdir(), 'wasp-files-'));
     const logged: string[] = [];
 
-    await createS3FileSync({ client, bucket, threadId, dir, log: (m) => logged.push(m) })();
+    await createS3Files({ client, bucket, threadId, dir, log: (m) => logged.push(m) }).restoreAll();
 
     expect(existsSync(path.join(dir, 'files'))).toBe(false);
     expect(existsSync(path.join(dir, '..', 'escaped.txt'))).toBe(false);

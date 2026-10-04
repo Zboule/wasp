@@ -5,7 +5,7 @@ import { createDynamoStore } from '@zboule/wasp-store';
 import { readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 
-import { createS3FileSync } from './files.ts';
+import { createS3Files } from './files.ts';
 import { createS3SessionStore } from './s3SessionStore.ts';
 import { sdkAgent, threadWorkDir } from './sdkAgent.ts';
 import { type ThreadCredentials, createRunnerServer } from './server.ts';
@@ -50,7 +50,7 @@ const server = createRunnerServer({
         await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: content, ContentType: 'text/plain; charset=utf-8' }));
         return key;
       },
-      syncFiles: createS3FileSync({ client: s3, bucket, threadId, dir: threadWorkDir(workDir, threadId) }),
+      files: createS3Files({ client: s3, bucket, threadId, dir: threadWorkDir(workDir, threadId) }),
       agent: sdkAgent({
         model: env('WASP_MODEL', 'claude-sonnet-5-5'),
         workDir,

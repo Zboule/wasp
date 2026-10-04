@@ -14,7 +14,7 @@ function setup() {
     now: () => clock,
     encryptToken: async (threadId, token) => `enc(${threadId}:${token})`,
     presign: async (ref, { download } = {}) => `https://signed.example/${ref}${download ? `?as=${download}` : ''}`,
-    presignUpload: async (ref, { mediaType, maxBytes }) => ({ url: 'https://bucket.example/', fields: { key: ref, 'Content-Type': mediaType, max: String(maxBytes) } }),
+    presignUpload: async (ref, { mediaType, size }) => ({ url: 'https://bucket.example/', fields: { key: ref, 'Content-Type': mediaType, size: String(size) } }),
     headObject: async (ref) => objects.get(ref) ?? null,
     deleteObjects: async (threadId) => void deleted.push(threadId),
     limits: { maxFileBytes: 1_000, maxFiles: 2 }
@@ -94,7 +94,7 @@ describe('wasp client', () => {
     const thread = crypto.randomUUID();
     const upload = await client.upload(thread, { name: '../Q3 report.pdf', mediaType: 'application/pdf', size: 900 });
     expect(upload.ref).toMatch(new RegExp(`^payloads/${thread}/files/[0-9a-f-]{36}/_Q3 report\\.pdf$`));
-    expect(upload.fields).toMatchObject({ key: upload.ref, 'Content-Type': 'application/pdf', max: '1000' });
+    expect(upload.fields).toMatchObject({ key: upload.ref, 'Content-Type': 'application/pdf', size: '900' });
 
     expect((await client.upload(thread, { name: 'x', mediaType: 'not a type', size: 1 })).fields['Content-Type']).toBe('application/octet-stream');
     await expect(client.upload(thread, { name: 'big.bin', size: 1_001 })).rejects.toThrow(/limited/);
@@ -140,6 +140,27 @@ describe('wasp client', () => {
     await store.append(thread, [{ type: 'CUSTOM', name: 'wasp.message', value: { messageId, text: 'look', deliver: 'later', attachments: stored!.attachments! } }], 2);
     const [entry] = (await client.feed(thread)).entries;
     expect(entry?.event).toMatchObject({ value: { attachments: [expect.objectContaining({ ref, url: `https://signed.example/${ref}?as=a.html` })] } });
+  });
+
+  it('gives no URL to a ref the agent planted for another thread’s objects', async () => {
+    const { store, client } = setup();
+    const thread = crypto.randomUUID();
+    const other = crypto.randomUUID();
+    const foreign = { id: crypto.randomUUID(), name: 'x.jsonl', mediaType: 'text/plain', size: 1 };
+    await store.append(
+      thread,
+      [
+        { type: 'CUSTOM', name: 'wasp.message', value: { messageId: 'm', text: 'hi', deliver: 'later', attachments: [{ ...foreign, ref: `sessions/${other}/x.jsonl` }] } },
+        { type: 'TOOL_CALL_RESULT', messageId: 'r', toolCallId: 't1', content: '…', outputRef: `sessions/${other}/x.jsonl` },
+        { type: 'TOOL_CALL_ARGS', toolCallId: 't2', delta: '…', argsRef: `payloads/${thread}/../${other}/files/x` }
+      ],
+      1
+    );
+    await store.enqueue(thread, { id: 'q', text: 'x', deliver: 'later', createdAt: 1, attachments: [{ ...foreign, ref: `payloads/${other}/files/${foreign.id}/x.jsonl` }] });
+
+    const page = await client.feed(thread);
+    expect(JSON.stringify(page)).not.toContain('signed.example');
+    expect(page.queue[0]?.attachments).toEqual([]);
   });
 
   it('cancels, interrupts and deletes', async () => {
