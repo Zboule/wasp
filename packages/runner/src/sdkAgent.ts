@@ -24,7 +24,39 @@ export type SdkAgentConfig = {
   /** Restricts the available tools (the SDK's `tools`); `allowedTools` would only auto-approve. */
   tools?: string[];
   disallowedTools?: string[];
+  /** The Claude credential, given to the CLI only (never put in this process's environment). */
+  claude?: { CLAUDE_CODE_OAUTH_TOKEN: string } | { ANTHROPIC_API_KEY: string };
 };
+
+/**
+ * Variables that would make the CLI use another credential than the one we
+ * pass (cloud providers, then ANTHROPIC_AUTH_TOKEN, then ANTHROPIC_API_KEY,
+ * then CLAUDE_CODE_OAUTH_TOKEN), plus AWS credentials, which the agent must
+ * never see (CLAUDE.md, invariant 2).
+ */
+const STRIPPED_FROM_CLI_ENV = [
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_VERTEX',
+  'CLAUDE_CODE_USE_FOUNDRY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_API_KEY',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+  'AWS_ACCESS_KEY_ID',
+  'AWS_SECRET_ACCESS_KEY',
+  'AWS_SESSION_TOKEN',
+  'AWS_CONTAINER_CREDENTIALS_FULL_URI',
+  'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI',
+  'AWS_CONTAINER_AUTHORIZATION_TOKEN',
+  'AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE'
+];
+
+export function cliEnv(base: NodeJS.ProcessEnv, claude: SdkAgentConfig['claude']): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (value !== undefined && !STRIPPED_FROM_CLI_ENV.includes(key)) env[key] = value;
+  }
+  return { ...env, ...(claude ?? {}), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
+}
 
 /**
  * Turns run on the Claude Agent SDK, one streaming-input query per session.
@@ -46,7 +78,7 @@ export function sdkAgent(config: SdkAgentConfig): Agent {
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         settingSources: [],
-        env: { ...process.env, CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' },
+        env: config.claude ? cliEnv(process.env, config.claude) : { ...process.env, CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' },
         ...(config.sessionStore ? { sessionStore: config.sessionStore } : {}),
         ...(config.maxTurns ? { maxTurns: config.maxTurns } : {}),
         ...(config.maxBudgetUsd ? { maxBudgetUsd: config.maxBudgetUsd } : {}),

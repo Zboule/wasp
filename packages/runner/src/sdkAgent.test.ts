@@ -62,3 +62,22 @@ describe('toAgentEvents', () => {
     expect(toAgentEvents(result('error_max_turns', 0.01), fresh())[0]).toMatchObject({ outcome: 'failed', error: 'error_max_turns' });
   });
 });
+
+describe('cliEnv', () => {
+  it('gives the CLI the Claude credential we pass, and no AWS or competing credentials', async () => {
+    const { cliEnv } = await import('./sdkAgent.ts');
+    const env = cliEnv(
+      {
+        PATH: '/usr/bin',
+        AWS_ACCESS_KEY_ID: 'AKIA',
+        AWS_SECRET_ACCESS_KEY: 'secret',
+        AWS_SESSION_TOKEN: 'session',
+        AWS_CONTAINER_CREDENTIALS_FULL_URI: 'http://169.254.170.23/v1/credentials',
+        ANTHROPIC_API_KEY: 'stale-key',
+        CLAUDE_CODE_USE_BEDROCK: '1'
+      },
+      { CLAUDE_CODE_OAUTH_TOKEN: 'oat' }
+    );
+    expect(env).toEqual({ PATH: '/usr/bin', CLAUDE_CODE_OAUTH_TOKEN: 'oat', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' });
+  });
+});
