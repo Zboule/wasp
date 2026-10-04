@@ -104,12 +104,13 @@ providers: {
 
 Your agent is a folder: `agent/prompt.md` is appended to the Claude Code system prompt.
 
-Then expose four routes per thread from your API (check that the user owns the thread first), and point the UI
+Then expose five routes per thread from your API (check that the user owns the thread first), and point the UI
 at them:
 
 ```
 GET    /threads/:id/feed?after=     → wasp.feed(id, { after })
-POST   /threads/:id/messages        → wasp.post(id, { text, deliver })
+POST   /threads/:id/messages        → wasp.post(id, { text, deliver, files })
+POST   /threads/:id/uploads         → wasp.upload(id, { name, mediaType, size })
 POST   /threads/:id/interrupt       → wasp.interrupt(id)
 DELETE /threads/:id/queue/:message  → wasp.cancel(id, message)
 ```
@@ -133,7 +134,7 @@ contributors must keep are in [`CLAUDE.md`](CLAUDE.md).
 
 wasp is **experimental (0.x)**: it runs end to end in a private demo, and its API may still move.
 
-Done: queue with `later` / `asap` / `now`, interrupt, durable AG-UI feed with cursor paging, transcript
+Done: queue with `later` / `asap` / `now`, interrupt, file uploads (user → agent), durable AG-UI feed with cursor paging, transcript
 persistence and resume, per-thread credentials, large-output offload to S3, credential refresh, self-healing
 wake-ups, React chat and embed.
 

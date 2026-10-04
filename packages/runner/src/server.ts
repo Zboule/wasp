@@ -15,7 +15,12 @@ export type Invocation =
   | { op: 'refresh'; threadId: string; credentials: ThreadCredentials };
 
 /** What one drain needs, built from the credentials the waker handed in. Never from the microVM's own role. */
-export type ThreadRuntime = { store: ThreadStore; agent: Agent; offload?: (threadId: string, content: string) => Promise<string> };
+export type ThreadRuntime = {
+  store: ThreadStore;
+  agent: Agent;
+  offload?: (threadId: string, content: string) => Promise<string>;
+  syncFiles?: (threadId: string) => Promise<void>;
+};
 
 /** Ask for fresh credentials this long before the current ones expire (they last at most an hour). */
 const REFRESH_BEFORE_MS = 10 * 60_000;

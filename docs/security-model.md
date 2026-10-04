@@ -42,6 +42,16 @@ ever holds credentials scoped to its own thread.
 | Credential lifetime | ≤ 1 hour (role chaining). Refreshed by the waker on a second invoke to the same session. | STS |
 | Caller tokens | encrypted by the client with context `{ threadId }`, decryptable only through the thread role | KMS |
 | App data | only through the app's MCP server with the caller's token | the app |
+| User files | uploaded by the browser with a presigned POST for one key, `payloads/<threadId>/files/<fileId>/<name>`, signed by the app's role (`s3:PutObject` on `payloads/*/files/*` only). Inside the thread's own prefix, so the session policy is unchanged. Downloads are presigned with `Content-Disposition: attachment`, so an uploaded page never runs on the bucket's origin. | IAM, S3 POST policy |
+
+Files: the client attaches a file to a message only if its key parses as one
+of **this** thread's files (`parseFileRef`), and takes its size and type from
+S3, not from the caller. The runner copies files into the agent's working
+directory, and turns a key into a path only after the same check: the agent
+can write any key under its own `payloads/` prefix, and must not be able to
+make the runner write outside that directory. The bucket allows CORS `POST`
+(`WaspAgent` `allowedOrigins`, any origin by default): CORS only lets a
+browser send what the presigned POST already authorises.
 
 ## Accepted risks
 
@@ -51,6 +61,7 @@ These are **not** bugs. A compromised agent is the owner of its own thread.
 |---|---|
 | Delete or alter its own thread's queue, feed or transcript, including inventing "the user said…" events | It's that thread's own conversation. No other thread or user is affected. |
 | Exfiltrate its own thread's data over the network | The agent needs network access to do its job, and it only ever holds its own thread. |
+| Read, replace or add files in its own thread, including ones later messages attach | Same as the transcript: its own thread's data. The client re-checks a file's size and type in S3 when a message attaches it. |
 | Read its own user's caller token | That token grants only what that user can already do through MCP, and it lives a few hours. |
 | Read the Claude credential | The Claude CLI needs it inside the microVM. Mitigation: an API key with a spend limit, or Bedrock mode (temporary IAM credentials, nothing long-lived to steal). |
 

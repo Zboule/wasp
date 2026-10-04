@@ -1,5 +1,5 @@
 import type { Deliver, FeedEvent } from './events.ts';
-import type { FeedEntry, QueuedMessage } from './thread.ts';
+import type { FeedEntry, QueuedMessage, WaspFile } from './thread.ts';
 
 /** A queued message as stored: what the app sees, plus what only the runner needs. */
 export type StoredMessage = QueuedMessage & {
@@ -9,7 +9,7 @@ export type StoredMessage = QueuedMessage & {
   callerToken?: string;
 };
 
-export type NewMessage = { id: string; text: string; deliver: Deliver; createdAt: number; callerToken?: string };
+export type NewMessage = { id: string; text: string; deliver: Deliver; createdAt: number; callerToken?: string; attachments?: WaspFile[] };
 
 export type CancelResult = 'cancelled' | 'delivered' | 'missing';
 
