@@ -131,7 +131,7 @@ contributors must keep are in [`CLAUDE.md`](CLAUDE.md).
 
 ## Status and roadmap
 
-wasp is **experimental (0.x)**. It is used in production by one app and its API may still move.
+wasp is **experimental (0.x)**: it runs end to end in a private demo, and its API may still move.
 
 Done: queue with `later` / `asap` / `now`, interrupt, durable AG-UI feed with cursor paging, transcript
 persistence and resume, per-thread credentials, large-output offload to S3, credential refresh, self-healing
