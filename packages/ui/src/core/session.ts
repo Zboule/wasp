@@ -1,4 +1,4 @@
-import type { Deliver, FeedPage, QueuedMessage, ThreadState } from '@zboule/wasp-protocol';
+import type { CancelResult, Deliver, FeedPage, QueuedMessage, ThreadState } from '@zboule/wasp-protocol';
 import { createStore } from 'zustand/vanilla';
 
 import { type TimelineItem, applyEvent } from './timeline.ts';
@@ -8,7 +8,8 @@ export interface WaspTransport {
   feed(after: string | null): Promise<FeedPage>;
   post(text: string, deliver: Deliver): Promise<unknown>;
   interrupt(): Promise<unknown>;
-  cancel(messageId: string): Promise<unknown>;
+  /** `cancelled`, or why not: `delivered` (the agent took it first) or `missing`. */
+  cancel(messageId: string): Promise<CancelResult>;
 }
 
 export type WaspSessionState = {
@@ -67,8 +68,13 @@ export function createWaspSession(transport: WaspTransport, { activeMs = 1_000, 
     }, busy ? activeMs : idleMs);
   }
 
+  // An action usually makes the thread busy: poll now, and from now on at the busy pace.
   const afterAction = async () => {
     await poll();
+    if (running) {
+      if (timer) clearTimeout(timer);
+      schedule();
+    }
   };
 
   return {
@@ -84,7 +90,8 @@ export function createWaspSession(transport: WaspTransport, { activeMs = 1_000, 
       timer = null;
     },
     refresh: poll,
-    async post(text: string, deliver: Deliver = 'later') {
+    /** `asap` by default: the agent reads it at its next step, without being stopped. */
+    async post(text: string, deliver: Deliver = 'asap') {
       await transport.post(text, deliver);
       await afterAction();
     },
@@ -92,9 +99,10 @@ export function createWaspSession(transport: WaspTransport, { activeMs = 1_000, 
       await transport.interrupt();
       await afterAction();
     },
-    async cancel(messageId: string) {
-      await transport.cancel(messageId);
+    async cancel(messageId: string): Promise<CancelResult> {
+      const result = await transport.cancel(messageId);
       await afterAction();
+      return result;
     }
   };
 }
@@ -105,7 +113,7 @@ export function createWaspSession(transport: WaspTransport, { activeMs = 1_000, 
  *   GET    {base}/feed?after=<cursor>
  *   POST   {base}/messages        { text, deliver }
  *   POST   {base}/interrupt
- *   DELETE {base}/queue/{messageId}
+ *   DELETE {base}/queue/{messageId} → { result } or the bare result of wasp.cancel
  */
 export function httpTransport(base: string, init: RequestInit = { credentials: 'include' }): WaspTransport {
   const call = async (path: string, options: RequestInit = {}) => {
@@ -117,6 +125,9 @@ export function httpTransport(base: string, init: RequestInit = { credentials: '
     feed: (after) => call(`/feed${after ? `?after=${encodeURIComponent(after)}` : ''}`) as Promise<FeedPage>,
     post: (text, deliver) => call('/messages', { method: 'POST', body: JSON.stringify({ text, deliver }) }),
     interrupt: () => call('/interrupt', { method: 'POST' }),
-    cancel: (messageId) => call(`/queue/${encodeURIComponent(messageId)}`, { method: 'DELETE' })
+    cancel: async (messageId) => {
+      const body = (await call(`/queue/${encodeURIComponent(messageId)}`, { method: 'DELETE' })) as { result?: CancelResult } | CancelResult | null;
+      return (typeof body === 'string' ? body : body?.result) ?? 'missing';
+    }
   };
 }

@@ -77,7 +77,7 @@ Putting an agent in a product is mostly not about the model. It is about what ha
 |---|---|---|
 | [`@zboule/wasp-infra`](packages/infra) | `sst deploy` | `WaspAgent`: the runtime, its image, storage, KMS key, waker and IAM, in your account |
 | [`@zboule/wasp-client`](packages/client) | your API | `post`, `feed`, `interrupt`, `cancel`, `deleteThread` |
-| [`@zboule/wasp-ui`](packages/ui) | the browser | a headless session (any framework), `WaspChat` for React, and a one-file embed |
+| [`@zboule/wasp-ui`](packages/ui) | the browser | `WaspChat` for React, themable (CSS variables, a shadcn/ui theme) and pluggable (labels, tool renderers, building blocks); a headless session; a one-file embed |
 | [`@zboule/wasp-protocol`](packages/protocol) | everywhere | the shared contracts: feed events, queue, thread state, the store interface |
 
 ## Quick start
@@ -136,7 +136,7 @@ wasp is **experimental (0.x)**: it runs end to end in a private demo, and its AP
 
 Done: queue with `later` / `asap` / `now`, interrupt, file uploads (user → agent), durable AG-UI feed with cursor paging, transcript
 persistence and resume, per-thread credentials, large-output offload to S3, credential refresh, self-healing
-wake-ups, React chat and embed.
+wake-ups, a React chat (Markdown, queue with cancel and edit, send and stop in the input) with themes, and an embed.
 
 Next:
 - MCP servers called **as the user** (caller tokens are already stored encrypted per message; the runner wiring is next)

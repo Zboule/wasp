@@ -1,0 +1,207 @@
+import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+
+import type { TimelineItem, ToolItem } from '../core/timeline.ts';
+import { formatArgs, parseArgs, toolLabel, toolSummary } from '../core/tools.ts';
+import { useWasp } from './context.tsx';
+import { Alert, ArrowDown, Check, Chevron, Spinner, Stop } from './icons.tsx';
+import { Markdown } from './Markdown.tsx';
+
+/** How close to the bottom still counts as "following" the conversation. */
+const STICK_PX = 96;
+
+/** The conversation: messages, tool calls, notices, and what the agent is doing now. */
+export function WaspTimeline() {
+  const { state, labels, components, options, send } = useWasp();
+  const scroller = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  const [behind, setBehind] = useState(false);
+
+  // Follow the content as it grows (streamed text grows without new items),
+  // unless the reader has scrolled up to read.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const inner = content.current;
+    if (!el || !inner || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+      else setBehind(true);
+    });
+    observer.observe(inner);
+    return () => observer.disconnect();
+  }, []);
+
+  const onScroll = () => {
+    const el = scroller.current!;
+    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
+    if (stick.current) setBehind(false);
+  };
+  const jump = () => {
+    const el = scroller.current!;
+    stick.current = true;
+    setBehind(false);
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
+
+  const empty = state.loaded && state.timeline.length === 0 && state.queue.length === 0 && state.state === 'idle';
+  const Empty = components.Empty;
+  const emptyBody = (
+    <div className="wasp-empty">
+      <p>{labels.empty}</p>
+      {options.suggestions && options.suggestions.length > 0 && (
+        <div className="wasp-suggestions">
+          {options.suggestions.map((s) => (
+            <button key={s} type="button" className="wasp-suggestion" onClick={() => void send(s)}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="wasp-scroll" ref={scroller} onScroll={onScroll}>
+      <div className="wasp-column wasp-timeline" ref={content} role="log" aria-live="polite" aria-relevant="additions">
+        {!state.loaded && (
+          <div className="wasp-status">
+            <Spinner /> {labels.loading}
+          </div>
+        )}
+        {empty && (Empty ? <Empty>{emptyBody}</Empty> : emptyBody)}
+        {groupTools(state.timeline).map((group) =>
+          Array.isArray(group) ? (
+            <div className="wasp-tools" key={`tools:${group[0]!.id}`}>
+              {group.map((tool) => (
+                <ToolCall key={tool.id} item={tool} />
+              ))}
+            </div>
+          ) : (
+            <Item key={`${group.kind}:${group.id}`} item={group} streaming={state.state === 'working'} />
+          )
+        )}
+        {state.state === 'waking_up' && (
+          <div className="wasp-status">
+            <Spinner /> {labels.wakingUp}
+          </div>
+        )}
+        {state.state === 'working' && (
+          <div className="wasp-status working">
+            <span className="wasp-dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            {labels.working}
+          </div>
+        )}
+      </div>
+      {behind && (
+        <button type="button" className="wasp-jump" onClick={jump} aria-label={labels.latest} title={labels.latest}>
+          <ArrowDown />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Consecutive tool calls sit together, as one step of work. */
+function groupTools(timeline: TimelineItem[]): (Exclude<TimelineItem, ToolItem> | ToolItem[])[] {
+  const out: (Exclude<TimelineItem, ToolItem> | ToolItem[])[] = [];
+  for (const item of timeline) {
+    const last = out.at(-1);
+    if (item.kind === 'tool' && Array.isArray(last)) last.push(item);
+    else out.push(item.kind === 'tool' ? [item] : item);
+  }
+  return out;
+}
+
+function Item({ item, streaming }: { item: Exclude<TimelineItem, ToolItem>; streaming: boolean }) {
+  const { labels, components } = useWasp();
+  switch (item.kind) {
+    case 'user': {
+      const body = (
+        <div className="wasp-turn user">
+          <div className="wasp-bubble">{item.text}</div>
+          {item.deliver !== 'later' && <div className="wasp-meta">{labels.deliveredMidTurn[item.deliver]}</div>}
+        </div>
+      );
+      const UserMessage = components.UserMessage;
+      return UserMessage ? <UserMessage item={item}>{body}</UserMessage> : body;
+    }
+    case 'assistant': {
+      if (!item.text) return null;
+      const Md = components.Markdown;
+      const body = (
+        <div className="wasp-turn assistant">
+          {Md ? <Md text={item.text} streaming={streaming} /> : <Markdown text={item.text} copyLabel={labels.copy} copiedLabel={labels.copied} />}
+        </div>
+      );
+      const AssistantMessage = components.AssistantMessage;
+      return AssistantMessage ? <AssistantMessage item={item}>{body}</AssistantMessage> : body;
+    }
+    case 'notice':
+      return (
+        <div className={`wasp-notice ${item.code}`} role={item.code === 'interrupted' ? undefined : 'alert'}>
+          {item.code === 'interrupted' ? <Stop /> : <Alert />}
+          <span>
+            {item.code === 'interrupted' ? labels.interrupted : item.code === 'undeliverable' ? labels.undeliverable : labels.runError}
+            {item.detail && item.code !== 'interrupted' ? <span className="wasp-notice-detail">{item.detail}</span> : null}
+          </span>
+        </div>
+      );
+  }
+}
+
+function ToolCall({ item }: { item: ToolItem }) {
+  const { labels, components, toolRenderer } = useWasp();
+  const custom = toolRenderer(item.name);
+  const [open, setOpen] = useState(custom?.open ?? false);
+  const summary = custom?.summary ? custom.summary(parseArgs(item.args), item) : toolSummary(item.args);
+
+  const body: ReactNode = custom?.render ? (
+    custom.render(item)
+  ) : (
+    <>
+      {item.args && (
+        <section>
+          <h4>{labels.toolArgs}</h4>
+          <pre>{formatArgs(item.args)}</pre>
+          {item.argsUrl && <SafeLink href={item.argsUrl}>{labels.fullArgs}</SafeLink>}
+        </section>
+      )}
+      <section>
+        <h4>{labels.toolResult}</h4>
+        {item.result !== undefined ? <pre className="wasp-tool-out">{item.result || ' '}</pre> : <p className="wasp-muted">{labels.toolRunning}</p>}
+        {item.resultUrl && <SafeLink href={item.resultUrl}>{labels.fullOutput}</SafeLink>}
+      </section>
+    </>
+  );
+
+  const view = (
+    <div className={`wasp-tool ${item.status}${open ? ' open' : ''}`}>
+      <button type="button" className="wasp-tool-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="wasp-tool-status">{item.status === 'running' ? <Spinner /> : item.status === 'error' ? <Alert /> : item.status === 'stopped' ? <Stop /> : <Check />}</span>
+        {custom?.icon && <span className="wasp-tool-icon">{custom.icon}</span>}
+        <span className="wasp-tool-name">{custom?.label ?? toolLabel(item.name)}</span>
+        {summary && <span className="wasp-tool-summary">{summary}</span>}
+        <span className="wasp-tool-caret">
+          <Chevron />
+        </span>
+      </button>
+      {open && <div className="wasp-tool-body">{body}</div>}
+    </div>
+  );
+  const Tool = components.Tool;
+  return Tool ? <Tool item={item}>{view}</Tool> : view;
+}
+
+/** Only https links (the client's signed URLs), opened without access to this page. */
+function SafeLink({ href, children }: { href: string; children: string }) {
+  if (!href.startsWith('https://')) return null;
+  return (
+    <a className="wasp-link" href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}

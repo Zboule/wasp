@@ -1,0 +1,30 @@
+/*
+ * wasp on a shadcn/ui design system (Tailwind v4: tokens that are whole
+ * colours, like `--primary: oklch(…)` or `#fb5014`). The chat takes the host's
+ * colours, radius and font, and its light/dark follows the host's own
+ * switch (a `.dark` class or anything else that redefines the tokens), not the
+ * system's.
+ *
+ *   import '@zboule/wasp-ui/styles.css';
+ *   import '@zboule/wasp-ui/themes/shadcn.css';
+ *
+ * Declared on .wasp itself so the tokens resolve where the chat is, inside
+ * whatever .dark scope it sits in. To adjust one, set it on a more specific
+ * selector: `.my-chat.wasp { --wasp-accent: … }`.
+ */
+.wasp {
+  --wasp-bg: var(--background);
+  --wasp-surface: var(--card, var(--background));
+  --wasp-ink: var(--foreground);
+  --wasp-muted: var(--muted-foreground);
+  --wasp-line: var(--border);
+  --wasp-soft: var(--muted);
+  --wasp-accent: var(--primary);
+  --wasp-accent-ink: var(--primary-foreground);
+  --wasp-error: var(--destructive);
+  --wasp-focus: var(--ring);
+  --wasp-radius: calc(var(--radius, 0.625rem) + 6px);
+  --wasp-user-bg: color-mix(in srgb, var(--primary) 10%, var(--background));
+  --wasp-user-ink: var(--foreground);
+  --wasp-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 20px -8px rgb(0 0 0 / 0.12);
+}

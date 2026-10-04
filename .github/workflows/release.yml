@@ -39,5 +39,12 @@ jobs:
       - run: pnpm test
       - run: pnpm --filter "@zboule/wasp-protocol" --filter "@zboule/wasp-client" --filter "@zboule/wasp-infra" --filter "@zboule/wasp-ui" build
 
+      # pnpm packs (it rewrites workspace:* and applies publishConfig); npm publishes,
+      # because npm's trusted publishing (OIDC) needs the npm CLI, 11.5.1 or later.
+      - name: Pack
+        run: |
+          mkdir -p .release
+          for p in protocol client infra ui; do (cd packages/$p && pnpm pack --pack-destination ../../.release); done
+      - run: npm install -g npm@^11.5.1
       - name: Publish (provenance, trusted publishing)
-        run: pnpm -r --filter "@zboule/wasp-protocol" --filter "@zboule/wasp-client" --filter "@zboule/wasp-infra" --filter "@zboule/wasp-ui" publish --access public --no-git-checks --provenance
+        run: for t in .release/*.tgz; do npm publish "$t" --access public --provenance; done
