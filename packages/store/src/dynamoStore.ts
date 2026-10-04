@@ -213,8 +213,20 @@ export function createDynamoStore({ tableName, client }: { tableName: string; cl
       return Item && Number(Item.until) > now ? String(Item.owner) : null;
     },
 
-    async requestWake(threadId, at) {
-      await client.send(new PutCommand({ TableName: tableName, Item: { PK: pk(threadId), SK: 'CTL#WAKE', at } }));
+    async requestWake(threadId, at, minIntervalMs = 0) {
+      try {
+        await client.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { PK: pk(threadId), SK: 'CTL#WAKE', at },
+            ConditionExpression: 'attribute_not_exists(PK) OR #at <= :cutoff',
+            ExpressionAttributeNames: { '#at': 'at' },
+            ExpressionAttributeValues: { ':cutoff': at - minIntervalMs }
+          })
+        );
+      } catch (error) {
+        if (!conditionFailed(error)) throw error;
+      }
     },
 
     async requestCredentials(threadId, at) {

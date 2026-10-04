@@ -9,6 +9,7 @@ type Thread = {
   interrupt: boolean;
   seq: number;
   signals: { wake: number; credentials: number };
+  lastWakeAt: number | null;
 };
 
 /** For tests and local development. Semantics match the DynamoDB store. `signals` counts wake/credential requests. */
@@ -16,7 +17,7 @@ export function createMemoryStore(): ThreadStore & { signals(threadId: string): 
   const threads = new Map<string, Thread>();
   const thread = (id: string): Thread => {
     let t = threads.get(id);
-    if (!t) threads.set(id, (t = { queue: new Map(), feed: [], lease: null, interrupt: false, seq: 0, signals: { wake: 0, credentials: 0 } }));
+    if (!t) threads.set(id, (t = { queue: new Map(), feed: [], lease: null, interrupt: false, seq: 0, signals: { wake: 0, credentials: 0 }, lastWakeAt: null }));
     return t;
   };
 
@@ -79,8 +80,11 @@ export function createMemoryStore(): ThreadStore & { signals(threadId: string): 
       const lease = thread(threadId).lease;
       return lease && lease.until > now ? lease.owner : null;
     },
-    async requestWake(threadId) {
-      thread(threadId).signals.wake++;
+    async requestWake(threadId, at, minIntervalMs = 0) {
+      const t = thread(threadId);
+      if (t.lastWakeAt !== null && at - t.lastWakeAt < minIntervalMs) return;
+      t.lastWakeAt = at;
+      t.signals.wake++;
     },
     async requestCredentials(threadId) {
       thread(threadId).signals.credentials++;

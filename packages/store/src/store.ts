@@ -35,8 +35,12 @@ export interface ThreadStore {
   releaseLease(threadId: string, owner: string): Promise<void>;
   leaseHolder(threadId: string, now: number): Promise<string | null>;
 
-  /** Asks the waker to (re)start a drain: how a stalled thread is picked up again. */
-  requestWake(threadId: string, at: number): Promise<void>;
+  /**
+   * Asks the waker to (re)start a drain: how a stalled thread is picked up again.
+   * Ignored when the last request is younger than `minIntervalMs`, so a polling
+   * UI cannot turn one stalled thread into a stream of invocations.
+   */
+  requestWake(threadId: string, at: number, minIntervalMs?: number): Promise<void>;
   /** Asks the waker for fresh thread-scoped credentials before the current ones expire. */
   requestCredentials(threadId: string, at: number): Promise<void>;
 
