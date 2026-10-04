@@ -1,118 +1,79 @@
-.wisp {
-  --w-accent: var(--wisp-accent, #f4762c);
-  --w-bg: var(--wisp-bg, #fff);
-  --w-ink: var(--wisp-ink, #2c2a27);
-  --w-muted: #8b8378;
-  --w-line: #ece4d8;
-  --w-soft: #f7f2ea;
+/* wasp chat. Override the --wasp-* variables to theme it. */
+.wasp {
+  --w-accent: var(--wasp-accent, #f5a524);
+  --w-bg: var(--wasp-bg, #ffffff);
+  --w-ink: var(--wasp-ink, #1d1b19);
+  --w-muted: var(--wasp-muted, #7d766d);
+  --w-line: var(--wasp-line, #ebe5dc);
+  --w-soft: var(--wasp-soft, #f7f3ec);
+  --w-error: var(--wasp-error, #c2410c);
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   background: var(--w-bg);
   color: var(--w-ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
 }
-.wisp * { box-sizing: border-box; }
-.wisp { position: relative; }
-/* header OVERLAYS the thread (messages really pass beneath it); gradient
-   60% white at top fading to fully transparent. Only the back button takes
-   taps — the gradient area lets the conversation through. */
-.wisp-chrome { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 14px; background: linear-gradient(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0)); pointer-events: none; }
-.wisp-chrome .wisp-back { pointer-events: auto; }
-.wisp-back { width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.65); background: rgb(255 255 255 / 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 1px 8px rgb(0 0 0 / 0.08); color: var(--w-ink); display: block; cursor: pointer; padding: 0; line-height: 0; text-align: center; }
-.wisp-back svg { vertical-align: middle; }
-.wisp-back:active { transform: scale(0.94); }
-.wisp-chrome-sp { width: 42px; flex-shrink: 0; }
+.wasp * { box-sizing: border-box; }
 
-.wisp-scrollwrap { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
-.wisp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: calc(64px + env(safe-area-inset-top)) 16px calc(156px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); display: flex; flex-direction: column; gap: 12px; }
-.wisp-jump { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(140px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); z-index: 4; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--w-line); background: var(--w-bg); color: var(--w-ink); font-size: 18px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.14); cursor: pointer; }
+.wasp-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; }
+.wasp-empty { margin: auto; color: var(--w-muted); }
 
-.wisp-empty { margin: auto; text-align: center; color: var(--w-muted); }
-.wisp-empty-em { font-size: 34px; }
-.wisp-sugg { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-.wisp-sugg button { border: 1px solid var(--w-line); background: var(--w-bg); border-radius: 20px; padding: 8px 14px; font-size: 13px; cursor: pointer; color: var(--w-ink); }
-.wisp-sugg button:hover { border-color: var(--w-accent); color: var(--w-accent); }
+.wasp-msg { line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wasp-msg.user { align-self: stretch; background: var(--w-soft); border: 1px solid var(--w-line); border-radius: 16px; padding: 11px 14px; }
+.wasp-msg.assistant { padding: 0 2px; }
 
-/* document-style thread: user messages are soft cards, assistant text flows
-   plainly on the page (Claude-app-inspired) */
-.wisp-msg { line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; }
-.wisp-msg.user { align-self: stretch; background: var(--w-soft); border: 1px solid var(--w-line); border-radius: 16px; padding: 11px 14px; }
-.wisp-msg.assistant { align-self: stretch; background: none; padding: 0 2px; font-size: 15.5px; }
+.wasp-notice { align-self: center; font-size: 13px; color: var(--w-muted); }
+.wasp-notice.error { color: var(--w-error); }
+.wasp-status { display: flex; align-items: center; gap: 8px; color: var(--w-muted); font-size: 13px; }
 
-/* markdown-rendered assistant messages */
-.wisp-msg.md { white-space: normal; }
-.wisp-msg.md p { margin: 0 0 8px; }
-.wisp-msg.md p:last-child, .wisp-msg.md ul:last-child, .wisp-msg.md ol:last-child, .wisp-msg.md pre:last-child { margin-bottom: 0; }
-.wisp-msg.md .md-h { font-weight: 700; margin: 10px 0 6px; }
-.wisp-msg.md .md-h:first-child { margin-top: 0; }
-.wisp-msg.md ul, .wisp-msg.md ol { margin: 0 0 8px; padding-left: 20px; }
-.wisp-msg.md li { margin: 3px 0; }
-.wisp-msg.md code { background: rgb(0 0 0 / 0.07); border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
-.wisp-msg.md pre { background: rgb(0 0 0 / 0.06); border-radius: 8px; padding: 10px; margin: 0 0 8px; overflow-x: auto; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; white-space: pre; }
-.wisp-msg.md a { color: var(--w-accent); }
-.wisp-msg.md strong { font-weight: 700; }
-.wisp-caret { display: inline-block; width: 7px; height: 15px; background: var(--w-muted); animation: wisp-blink 1s steps(2) infinite; vertical-align: middle; }
-@keyframes wisp-blink { 50% { opacity: 0; } }
+.wasp-tool { align-self: flex-start; max-width: 100%; border: 1px solid var(--w-line); border-radius: 12px; overflow: hidden; }
+.wasp-tool.running { border-color: var(--w-accent); }
+.wasp-tool.error { border-color: var(--w-error); }
+.wasp-tool-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 11px; background: none; border: none; cursor: pointer; font: inherit; color: var(--w-ink); text-align: left; }
+.wasp-tool-ico { color: var(--w-accent); font-weight: 700; }
+.wasp-tool.error .wasp-tool-ico { color: var(--w-error); }
+.wasp-tool-name { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 600; }
+.wasp-tool-caret { margin-left: auto; color: var(--w-muted); }
+.wasp-tool-body { padding: 0 11px 10px; display: flex; flex-direction: column; gap: 6px; }
+.wasp-pre { margin: 0; background: var(--w-soft); border-radius: 8px; padding: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
+.wasp-pre.result { color: var(--w-muted); }
 
-.wisp-tool { align-self: flex-start; max-width: 92%; border: 1px solid var(--w-line); border-radius: 12px; overflow: hidden; background: var(--w-bg); }
-.wisp-tool.running { border-color: var(--w-accent); }
-/* iOS Safari mishandles flex directly on <button> (content can collapse to
-   zero height) — the button is a plain block, .wisp-row inside does the flex */
-.wisp-tool-head { width: 100%; display: block; text-align: left; padding: 8px 11px; background: none; border: none; cursor: pointer; font: inherit; font-size: 14px; color: var(--w-ink); min-height: 36px; }
-.wisp-row { display: flex; align-items: center; gap: 8px; width: 100%; }
-.wisp-tool-ico { color: var(--w-accent); font-weight: 700; display: inline-flex; }
-.wisp-tool-name { font-weight: 600; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
-.wisp-tool-sub { color: var(--w-muted); font-size: 12px; }
-.wisp-tool-caret { margin-left: auto; color: var(--w-muted); }
-.wisp-tool-body { padding: 0 11px 10px; }
-.wisp-tool-args { background: var(--w-soft); border-radius: 8px; padding: 8px; font-size: 12px; overflow-x: auto; margin: 0 0 6px; white-space: pre-wrap; }
-.wisp-tool-result { font-size: 13px; color: var(--w-muted); }
-.wisp-tool-img { max-width: 100%; border-radius: 8px; margin-top: 4px; }
-.wisp-spin { width: 13px; height: 13px; border: 2px solid var(--w-soft); border-top-color: var(--w-accent); border-radius: 50%; display: inline-block; animation: wisp-spin 0.7s linear infinite; }
-@keyframes wisp-spin { to { transform: rotate(360deg); } }
+.wasp-queue { border-top: 1px solid var(--w-line); padding: 8px 16px; display: flex; flex-direction: column; gap: 6px; }
+.wasp-queued { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--w-muted); }
+.wasp-queued-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wasp-badge { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 999px; background: var(--w-soft); border: 1px solid var(--w-line); }
+.wasp-badge.now { border-color: var(--w-error); color: var(--w-error); }
+.wasp-badge.asap { border-color: var(--w-accent); color: var(--w-ink); }
 
-.wisp-think { align-self: flex-start; max-width: 88%; }
-.wisp-think-head { display: block; border: none; background: none; padding: 2px 4px; color: var(--w-muted); font-size: 13px; font-style: italic; cursor: pointer; font-family: inherit; text-align: left; }
-.wisp-think-head .wisp-row { gap: 6px; width: auto; }
-.wisp-think.live .wisp-think-head { cursor: default; }
-.wisp-think-ico { font-style: normal; }
-.wisp-think-body { color: var(--w-muted); font-size: 12.5px; line-height: 1.45; padding: 6px 10px; border-left: 2px solid var(--w-line); margin: 2px 0 0 8px; white-space: pre-wrap; }
-.wisp-think-body.streaming { max-height: 90px; overflow: hidden; display: flex; flex-direction: column-reverse; }
+.wasp-error { margin: 0 16px 8px; padding: 8px 12px; border-radius: 10px; background: #fff1eb; color: var(--w-error); font-size: 13px; }
 
-.wisp-working { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; color: var(--w-muted); font-size: 13px; padding: 4px 6px; }
-.wisp-working-dots { display: inline-flex; gap: 3px; }
-.wisp-working-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--w-accent); animation: wisp-bounce 1.2s infinite; }
-.wisp-working-dots i:nth-child(2) { animation-delay: 0.15s; }
-.wisp-working-dots i:nth-child(3) { animation-delay: 0.3s; }
-@keyframes wisp-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
+.wasp-composer { border-top: 1px solid var(--w-line); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.wasp-input { width: 100%; resize: none; border: 1px solid var(--w-line); border-radius: 12px; padding: 10px 12px; font: inherit; color: inherit; background: var(--w-bg); }
+.wasp-input:focus { outline: 2px solid var(--w-accent); outline-offset: -1px; }
+.wasp-actions { display: flex; align-items: center; gap: 8px; }
+.wasp-spacer { flex: 1; }
+.wasp-deliver { display: inline-flex; border: 1px solid var(--w-line); border-radius: 999px; overflow: hidden; }
+.wasp-deliver button { border: none; background: none; padding: 5px 11px; font: inherit; font-size: 12px; cursor: pointer; color: var(--w-muted); }
+.wasp-deliver button.on { background: var(--w-ink); color: var(--w-bg); }
+.wasp-btn { border: 1px solid var(--w-line); background: var(--w-bg); color: var(--w-ink); border-radius: 999px; padding: 7px 16px; font: inherit; font-size: 14px; cursor: pointer; }
+.wasp-btn.primary { background: var(--w-ink); color: var(--w-bg); border-color: var(--w-ink); }
+.wasp-btn:disabled { opacity: 0.4; cursor: default; }
+.wasp-link { background: none; border: none; padding: 0; color: var(--w-accent); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; }
 
-.wisp-approval { align-self: stretch; border: 1px solid var(--w-accent); background: #fff7f1; border-radius: 12px; padding: 12px; }
-.wisp-approval-txt { font-weight: 600; margin-bottom: 10px; }
-.wisp-cost { color: var(--w-muted); font-weight: 400; }
-.wisp-approval-actions { display: flex; gap: 8px; }
-.wisp-btn { border: 1px solid var(--w-line); background: var(--w-bg); border-radius: 9px; padding: 8px 18px; font-weight: 600; cursor: pointer; color: var(--w-ink); }
-.wisp-btn.primary { background: var(--w-accent); color: #fff; border-color: var(--w-accent); }
+.wasp-spin { width: 13px; height: 13px; border: 2px solid var(--w-soft); border-top-color: var(--w-accent); border-radius: 50%; display: inline-block; animation: wasp-spin 0.7s linear infinite; flex-shrink: 0; }
+@keyframes wasp-spin { to { transform: rotate(360deg); } }
 
-.wisp-error { align-self: stretch; background: #fdeeec; border: 1px solid #f4c9c3; color: #c0392b; border-radius: 10px; padding: 9px 12px; font-size: 13px; }
-
-.wisp-att { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-.wisp-att img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; }
-.wisp-pending { position: absolute; left: 12px; right: 12px; bottom: calc(130px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); z-index: 5; display: flex; gap: 8px; flex-wrap: wrap; }
-.wisp-pending-th { position: relative; width: 56px; height: 56px; }
-.wisp-pending-th img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; border: 1px solid var(--w-line); }
-.wisp-pending-th button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: var(--w-ink); color: #fff; font-size: 11px; cursor: pointer; line-height: 1; }
-.wisp-attach { width: 40px; height: 40px; flex-shrink: 0; border: 1px solid var(--w-line); border-radius: 50%; background: var(--w-bg); color: var(--w-ink); font-size: 22px; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.wisp-attach:hover { color: var(--w-accent); border-color: var(--w-accent); }
-/* the composer floats over the thread (content scrolls behind it) and rides
-   above the iOS keyboard via --wisp-kb from the visualViewport tracker */
-.wisp-input { position: absolute; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom) + var(--wisp-kb, 0px)); z-index: 5; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--w-line); border-radius: 22px; background: rgb(255 255 255 / 0.88); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 6px 24px rgb(0 0 0 / 0.12); }
-.wisp-input:focus-within { border-color: var(--w-accent); }
-.wisp-input textarea { resize: none; border: none; padding: 4px 6px; font: inherit; font-size: 15.5px; min-height: 44px; max-height: 140px; outline: none; color: var(--w-ink); background: none; field-sizing: content; }
-.wisp-input-row { display: flex; align-items: center; gap: 8px; }
-.wisp-input-sp { flex: 1; }
-.wisp-send { width: 40px; height: 40px; flex-shrink: 0; border: none; border-radius: 50%; background: var(--w-accent); color: #fff; font-size: 18px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-.wisp-send:disabled { opacity: 0.4; cursor: default; }
-.wisp-send.stop { background: var(--w-ink); display: inline-flex; align-items: center; justify-content: center; }
+@media (prefers-color-scheme: dark) {
+  .wasp:not(.wasp-light) {
+    --w-bg: var(--wasp-bg, #161513);
+    --w-ink: var(--wasp-ink, #f1ece4);
+    --w-muted: var(--wasp-muted, #9c958b);
+    --w-line: var(--wasp-line, #2b2925);
+    --w-soft: var(--wasp-soft, #201e1b);
+  }
+  .wasp:not(.wasp-light) .wasp-error { background: #2a1a12; }
+}

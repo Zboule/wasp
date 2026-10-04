@@ -1,5 +1,4 @@
-import { type Deliver, type FeedEntry, type FeedEvent, type FeedPage, threadState } from '@zboule/wasp-protocol';
-import type { CancelResult, ThreadStore } from '@zboule/wasp-store';
+import { type CancelResult, type Deliver, type FeedEntry, type FeedEvent, type FeedPage, type ThreadStore, threadState } from '@zboule/wasp-protocol';
 
 /** Everything the client needs, injected so the core is testable without AWS. */
 export type WaspClientDeps = {

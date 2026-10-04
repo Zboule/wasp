@@ -1,6 +1,6 @@
 {
   "name": "@zboule/wasp-client",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Call wasp from your app's API: post messages, read a thread's feed, interrupt, cancel",
   "type": "module",
   "exports": {
@@ -8,7 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "tsup"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1146.0",
@@ -16,7 +17,22 @@
     "@aws-sdk/client-s3": "^3.1146.0",
     "@aws-sdk/lib-dynamodb": "^3.1146.0",
     "@aws-sdk/s3-request-presigner": "^3.1146.0",
-    "@zboule/wasp-protocol": "workspace:*",
+    "@zboule/wasp-protocol": "workspace:*"
+  },
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "devDependencies": {
     "@zboule/wasp-store": "workspace:*"
   }
 }

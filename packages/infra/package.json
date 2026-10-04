@@ -1,15 +1,17 @@
 {
   "name": "@zboule/wasp-infra",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "WaspAgent: the SST component that deploys wasp (AgentCore runtime, storage, waker, roles) into your AWS account",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "typecheck": "tsc -p .",
     "test": "vitest run",
-    "assets": "node scripts/assets.mjs"
+    "assets": "node scripts/assets.mjs",
+    "build": "pnpm assets && tsup src/index.ts --format esm --dts --clean"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-agentcore": "^3.1146.0",
@@ -25,5 +27,21 @@
     "@pulumiverse/time": "0.1.1",
     "@types/aws-lambda": "^8.10.164",
     "esbuild": "^0.25.12"
+  },
+  "license": "MIT",
+  "files": [
+    "dist",
+    "image",
+    "assets"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
   }
 }

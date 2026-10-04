@@ -1,11 +1,27 @@
 {
   "name": "@zboule/wasp-protocol",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "The contracts between the wasp runner, client and UI: AG-UI feed events, queue and thread state",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "tsup src/index.ts --format esm --dts --clean"
+  },
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   }
 }
