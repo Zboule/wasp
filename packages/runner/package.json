@@ -1,0 +1,21 @@
+{
+  "name": "@jorna/wasp-runner",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The wasp engine: runs agent turns on AgentCore, drains a thread's queue, writes its feed",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.286",
+    "@jorna/wasp-protocol": "workspace:*"
+  }
+}
