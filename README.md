@@ -155,6 +155,13 @@ WASP_DYNAMODB_ENDPOINT=http://localhost:8000 WASP_S3_ENDPOINT=http://localhost:9
 
 `packages/runner/scripts/` has smoke tests that run the real engine and image against the real model.
 
+## Releasing
+
+Bump the four published packages to the same version, then push a tag `vX.Y.Z`. The
+[`release`](.github/workflows/release.yml) workflow checks the tag against the versions, runs the
+typecheck and tests, builds, and publishes to npm with provenance through trusted publishing
+(GitHub OIDC, no token).
+
 ## License
 
 [MIT](LICENSE)

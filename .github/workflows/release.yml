@@ -1,0 +1,43 @@
+# Release: push a tag vX.Y.Z whose version matches every published package.
+# Publishes with npm trusted publishing (GitHub OIDC): no npm token, no secret,
+# and every version carries provenance pointing back to this run.
+# One-time setup per package on npmjs.com: Settings → Trusted publishing →
+# GitHub Actions, repository Zboule/wasp, workflow release.yml.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # the OIDC token npm exchanges for a short-lived publish credential
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+
+      - name: The tag matches every published package
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for p in protocol client infra ui; do
+            v=$(node -p "require('./packages/$p/package.json').version")
+            [ "$v" = "$tag" ] || { echo "::error::packages/$p is $v, tag is $tag"; exit 1; }
+          done
+
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter "@zboule/wasp-protocol" --filter "@zboule/wasp-client" --filter "@zboule/wasp-infra" --filter "@zboule/wasp-ui" build
+
+      - name: Publish (provenance, trusted publishing)
+        run: pnpm -r --filter "@zboule/wasp-protocol" --filter "@zboule/wasp-client" --filter "@zboule/wasp-infra" --filter "@zboule/wasp-ui" publish --access public --no-git-checks --provenance
