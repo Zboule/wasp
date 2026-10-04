@@ -8,6 +8,10 @@ it keeps its users, its authorization, its MCP server and its agent definition.
 > **v2 is under construction on this branch** (see the design in issue #2).
 > The engine that apps run today is **v1**: tag `v1`, docs in `docs/v1/`.
 
+**Security:** the agent is assumed to fully control its microVM, and isolation is per
+thread. Read the invariants in `CLAUDE.md` (also `AGENTS.md`) before touching IAM,
+storage, credentials or the runner. The reasoning is in `docs/security-model.md`.
+
 ## Layout
 
 | Path | What |
