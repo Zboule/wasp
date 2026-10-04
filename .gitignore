@@ -10,3 +10,5 @@ coverage/
 packages/runner/legacy/deploy/.state*
 apps/playground/examples/poc/wisp.js
 .packs/
+packages/ui/playground/out/
+.release/

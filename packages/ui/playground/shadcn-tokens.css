@@ -1,0 +1,27 @@
+/* A sample shadcn/ui host (Tailwind v4 tokens), scoped so it only applies where the playground asks. */
+.host-shadcn {
+  --radius: 0.625rem;
+  --background: #ffffff;
+  --foreground: #1f242f;
+  --card: #ffffff;
+  --primary: #fb5014;
+  --primary-foreground: #ffffff;
+  --muted: #f6f6f6;
+  --muted-foreground: #85888e;
+  --border: #ececed;
+  --ring: #fd753b;
+  --destructive: #ef4447;
+  font-family: Manrope, 'Avenir Next', 'Segoe UI', sans-serif;
+}
+.host-shadcn.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --border: oklch(1 0 0 / 10%);
+  --ring: oklch(0.551 0.027 264.364);
+  --destructive: oklch(0.704 0.191 22.216);
+}

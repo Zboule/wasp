@@ -1,6 +1,6 @@
 {
   "name": "@zboule/wasp-infra",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "WaspAgent, the SST component that deploys wasp into your AWS account: AgentCore runtime, storage, waker and IAM.",
   "keywords": [
     "wasp",
