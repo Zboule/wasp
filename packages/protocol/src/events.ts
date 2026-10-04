@@ -4,6 +4,8 @@
  * a user message leaving the queue, and one that could not be delivered.
  */
 
+import type { WaspFile } from './thread.ts';
+
 export const EventType = {
   RUN_STARTED: 'RUN_STARTED',
   RUN_FINISHED: 'RUN_FINISHED',
@@ -54,7 +56,7 @@ export type ToolCallResult = {
 export type MessageDelivered = {
   type: 'CUSTOM';
   name: 'wasp.message';
-  value: { messageId: string; text: string; deliver: Deliver };
+  value: { messageId: string; text: string; deliver: Deliver; attachments?: WaspFile[] };
 };
 
 /** A queued user message could not be delivered (e.g. its caller token expired). */

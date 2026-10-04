@@ -1,11 +1,27 @@
 import type { Deliver, FeedEvent } from './events.ts';
 
+/**
+ * A file a user attached to a message. The bytes live in S3 at `ref`
+ * (`payloads/<threadId>/files/<id>/<name>`); the runner puts them in the
+ * agent's working directory. Shaped to serve files the agent hands back too.
+ */
+export type WaspFile = {
+  id: string;
+  name: string;
+  mediaType: string;
+  size: number;
+  ref: string;
+  /** A short-lived download URL. Set only in what the client's `feed` returns. */
+  url?: string;
+};
+
 /** A message waiting in a thread's queue, as the app sees it. */
 export type QueuedMessage = {
   id: string;
   text: string;
   deliver: Deliver;
   createdAt: number;
+  attachments?: WaspFile[];
 };
 
 /**

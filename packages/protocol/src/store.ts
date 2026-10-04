@@ -9,7 +9,7 @@ export type StoredMessage = QueuedMessage & {
   callerToken?: string;
 };
 
-export type NewMessage = { id: string; text: string; deliver: Deliver; createdAt: number; callerToken?: string };
+export type NewMessage = QueuedMessage & { callerToken?: string };
 
 export type CancelResult = 'cancelled' | 'delivered' | 'missing';
 

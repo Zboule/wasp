@@ -37,6 +37,14 @@ export function storeContract(name: string, makeStore: () => Promise<ThreadStore
       expect(await store.pending(t)).toEqual([]);
     });
 
+    it('keeps a message’s attachments', async () => {
+      const store = await makeStore();
+      const t = thread();
+      const file = { id: crypto.randomUUID(), name: 'a.pdf', mediaType: 'application/pdf', size: 3, ref: `payloads/${t}/files/x/a.pdf` };
+      await store.enqueue(t, { ...message('see attached'), attachments: [file] });
+      expect((await store.pending(t))[0]?.attachments).toEqual([file]);
+    });
+
     it('cancels only what is still queued', async () => {
       const store = await makeStore();
       const t = thread();

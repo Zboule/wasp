@@ -5,8 +5,9 @@ import { createDynamoStore } from '@zboule/wasp-store';
 import { readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 
+import { createS3Files } from './files.ts';
 import { createS3SessionStore } from './s3SessionStore.ts';
-import { sdkAgent } from './sdkAgent.ts';
+import { sdkAgent, threadWorkDir } from './sdkAgent.ts';
 import { type ThreadCredentials, createRunnerServer } from './server.ts';
 
 /**
@@ -23,6 +24,7 @@ const region = env('AWS_REGION', 'eu-west-1');
 const tableName = env('WASP_TABLE');
 const bucket = env('WASP_BUCKET');
 const systemPromptFile = process.env.WASP_SYSTEM_PROMPT_FILE;
+const workDir = env('WASP_WORK_DIR', '/work');
 const systemPrompt = systemPromptFile ? readFileSync(systemPromptFile, 'utf8') : process.env.WASP_SYSTEM_PROMPT;
 
 /** The SDK clients take a provider, so a refresh from the waker applies to the next call. */
@@ -48,9 +50,10 @@ const server = createRunnerServer({
         await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: content, ContentType: 'text/plain; charset=utf-8' }));
         return key;
       },
+      files: createS3Files({ client: s3, bucket, threadId, dir: threadWorkDir(workDir, threadId) }),
       agent: sdkAgent({
         model: env('WASP_MODEL', 'claude-sonnet-5-5'),
-        workDir: env('WASP_WORK_DIR', '/work'),
+        workDir,
         sessionStore: createS3SessionStore({ client: s3, bucket, threadId }),
         claude,
         ...(systemPrompt ? { systemPrompt } : {}),

@@ -2,6 +2,8 @@ import type { FeedEvent } from '@zboule/wasp-protocol';
 
 import type { Agent, AgentSession } from './agent.ts';
 import { toFeedEvents } from './feed.ts';
+import type { ThreadFiles } from './files.ts';
+import { messageForAgent } from './message.ts';
 import type { StoredMessage, ThreadStore } from '@zboule/wasp-store';
 
 export type DrainDeps = {
@@ -19,6 +21,8 @@ export type DrainDeps = {
   offload?: (threadId: string, content: string) => Promise<string>;
   /** Runs on every tick of a session, e.g. to ask for fresh credentials before they expire. */
   onTick?: () => Promise<void>;
+  /** Puts the thread's uploaded files in the agent's working directory. Without it, attachments are only listed. */
+  files?: ThreadFiles;
 };
 
 /** Feed items stay well under DynamoDB's 400 KB item limit. */
@@ -65,7 +69,7 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   if (!first) return;
   // An interrupt asked for while nothing ran must not kill this session's first turn.
   await store.takeInterrupt(threadId);
-  const session = await agent.open(threadId);
+  const [session] = await Promise.all([agent.open(threadId), deps.files?.restoreAll()]);
 
   let running = false;
   let interrupting = false;
@@ -80,13 +84,16 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   };
 
   const deliver = async (message: StoredMessage, priority?: 'next'): Promise<boolean> => {
+    // Before the claim: once claimed, the message is the agent's, and its files must already be there.
+    if (message.attachments?.length) await deps.files?.fetch(message.attachments);
     if (!(await store.claim(threadId, message.id, now()))) return false;
+    const { id: messageId, text, deliver: mode, attachments } = message;
     await store.append(
       threadId,
-      [{ type: 'CUSTOM', name: 'wasp.message', value: { messageId: message.id, text: message.text, deliver: message.deliver } }],
+      [{ type: 'CUSTOM', name: 'wasp.message', value: { messageId, text, deliver: mode, ...(attachments ? { attachments } : {}) } }],
       now()
     );
-    session.send({ text: message.text, ...(priority ? { priority } : {}) });
+    session.send({ text: messageForAgent(text, attachments), ...(priority ? { priority } : {}) });
     return true;
   };
 

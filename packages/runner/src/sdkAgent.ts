@@ -58,6 +58,11 @@ export function cliEnv(base: NodeJS.ProcessEnv, claude: SdkAgentConfig['claude']
   return { ...env, ...(claude ?? {}), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
 }
 
+/** The agent's cwd for a thread. Uploaded files land under its `files/` folder. */
+export function threadWorkDir(workDir: string, threadId: string): string {
+  return path.join(workDir, threadId);
+}
+
 /**
  * Turns run on the Claude Agent SDK, one streaming-input query per session.
  * The thread id is the SDK session id, so any microVM resumes the same
@@ -66,7 +71,7 @@ export function cliEnv(base: NodeJS.ProcessEnv, claude: SdkAgentConfig['claude']
 export function sdkAgent(config: SdkAgentConfig): Agent {
   return {
     async open(threadId) {
-      const cwd = path.join(config.workDir, threadId);
+      const cwd = threadWorkDir(config.workDir, threadId);
       mkdirSync(cwd, { recursive: true });
       const existing = await getSessionInfo(threadId, { dir: cwd, sessionStore: config.sessionStore });
       const input = channel<SDKUserMessage>();

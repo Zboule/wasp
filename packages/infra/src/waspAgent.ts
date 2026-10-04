@@ -39,6 +39,12 @@ export type WaspAgentArgs = {
   maxBudgetUsd?: number;
   /** Let `sst remove` delete the bucket with its transcripts. Off by default. */
   removable?: boolean;
+  /**
+   * Origins whose pages may upload files straight to the bucket (the presigned
+   * POST from `wasp.upload`). Defaults to any origin: the presigned POST is
+   * what authorises an upload, CORS only lets a browser send it.
+   */
+  allowedOrigins?: string[];
 };
 
 export type WaspAgentLink = { tableName: string; bucketName: string; kmsKeyId: string; region: string };
@@ -94,6 +100,15 @@ export class WaspAgent extends $util.ComponentResource {
     new aws.s3.BucketPublicAccessBlock(
       `${name}BucketPrivate`,
       { bucket: this.bucket.id, blockPublicAcls: true, blockPublicPolicy: true, ignorePublicAcls: true, restrictPublicBuckets: true },
+      parent
+    );
+
+    new aws.s3.BucketCorsConfigurationV2(
+      `${name}BucketCors`,
+      {
+        bucket: this.bucket.id,
+        corsRules: [{ allowedMethods: ['POST'], allowedOrigins: args.allowedOrigins ?? ['*'], allowedHeaders: ['*'], maxAgeSeconds: 3600 }]
+      },
       parent
     );
 
@@ -343,6 +358,8 @@ export class WaspAgent extends $util.ComponentResource {
         }),
         sst.aws.permission({ actions: ['kms:Encrypt'], resources: [this.key.arn] }),
         sst.aws.permission({ actions: ['s3:GetObject', 's3:DeleteObject'], resources: [$interpolate`${this.bucket.arn}/*`] }),
+        // Signs the presigned POST of `wasp.upload`: users' files, never transcripts or offloaded payloads.
+        sst.aws.permission({ actions: ['s3:PutObject'], resources: [$interpolate`${this.bucket.arn}/payloads/*/files/*`] }),
         sst.aws.permission({ actions: ['s3:ListBucket'], resources: [this.bucket.arn] })
       ]
     };

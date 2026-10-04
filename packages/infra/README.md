@@ -15,5 +15,8 @@ const agent = new WaspAgent('Agent', {
 new sst.aws.Function('Api', { handler: 'src/api.handler', link: [agent] });
 ```
 
+Browsers upload files straight to the bucket. Set `allowedOrigins: ['https://app.example.com']` to restrict
+which pages may send them (default: any origin; the presigned POST is what authorises an upload).
+
 Your `sst.config.ts` must list the `aws-native` (1.72.0), `docker-build` (>= 0.0.14) and `time` (0.1.1)
 providers. Deploying builds a `linux/arm64` image, so Docker must be running.
