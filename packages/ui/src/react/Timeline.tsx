@@ -70,6 +70,7 @@ export function WaspTimeline() {
             <Spinner /> {labels.loading}
           </div>
         )}
+        {state.loaded && options.intro && <div className="wasp-intro">{options.intro}</div>}
         {empty && (Empty ? <Empty>{emptyBody}</Empty> : emptyBody)}
         {groupTools(state.timeline).map((group) =>
           Array.isArray(group) ? (

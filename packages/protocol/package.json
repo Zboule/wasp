@@ -1,6 +1,6 @@
 {
   "name": "@zboule/wasp-protocol",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "The shared contracts of wasp: AG-UI feed events, the queue, thread state and the store interface.",
   "keywords": [
     "wasp",

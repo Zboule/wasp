@@ -62,6 +62,7 @@ The class names (`.wasp-*`) are stable too, if you need to restyle a detail.
   labels={labelsFr}                       // or any subset of WaspLabels: every string is replaceable
   defaultDeliver="asap"
   suggestions={['Summarise my week']}     // offered while the thread is empty
+  intro={<p>Acts as you: what it changes is recorded as your action.</p>}  // at the start of the conversation, scrolls away with it
   tools={{
     Bash: { label: 'Shell' },
     'mcp__calendar__*': {                 // a trailing * matches a prefix
