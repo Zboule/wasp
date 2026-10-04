@@ -47,6 +47,8 @@ export type WaspOptions = {
   defaultDeliver?: Deliver;
   /** Prompts offered while the thread is empty. */
   suggestions?: string[];
+  /** Shown at the start of the conversation and scrolls away with it: who the agent acts as, a disclaimer. */
+  intro?: ReactNode;
   tools?: Record<string, WaspToolRenderer>;
   components?: Partial<WaspComponents>;
   /** Checked before uploading, for an early answer; the API enforces its own. Defaults to wasp-client's. */

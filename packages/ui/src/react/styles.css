@@ -137,6 +137,13 @@
   color: var(--w-muted);
 }
 
+.wasp-intro {
+  align-self: center;
+  max-width: 100%;
+  color: var(--w-muted);
+  font-size: 0.8em;
+  text-align: center;
+}
 .wasp-empty {
   margin: auto;
   display: flex;
