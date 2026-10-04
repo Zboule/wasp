@@ -1,4 +1,4 @@
-import type { Deliver, FeedEvent } from '@zboule/wasp-protocol';
+import type { Deliver, FeedEvent, WaspFile } from '@zboule/wasp-protocol';
 
 export type ToolItem = {
   kind: 'tool';
@@ -19,7 +19,7 @@ export type ToolItem = {
 export type NoticeCode = 'interrupted' | 'undeliverable' | 'error';
 
 export type TimelineItem =
-  | { kind: 'user'; id: string; text: string; deliver: Deliver }
+  | { kind: 'user'; id: string; text: string; deliver: Deliver; attachments?: WaspFile[] }
   | { kind: 'assistant'; id: string; text: string }
   | ToolItem
   | { kind: 'notice'; id: string; code: NoticeCode; detail?: string };
@@ -36,8 +36,8 @@ export function applyEvent(timeline: TimelineItem[], event: FeedEvent, at: strin
   switch (event.type) {
     case 'CUSTOM':
       if (event.name === 'wasp.message') {
-        const { messageId, text, deliver } = event.value;
-        return [...timeline, { kind: 'user', id: messageId, text, deliver }];
+        const { messageId, text, deliver, attachments } = event.value;
+        return [...timeline, { kind: 'user', id: messageId, text, deliver, ...(attachments?.length ? { attachments } : {}) }];
       }
       return [
         ...timeline,

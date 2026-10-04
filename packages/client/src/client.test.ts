@@ -163,6 +163,15 @@ describe('wasp client', () => {
     expect(page.queue[0]?.attachments).toEqual([]);
   });
 
+  it('signs a fresh download for this thread’s files only', async () => {
+    const { client } = setup();
+    const thread = crypto.randomUUID();
+    const { ref } = await client.upload(thread, { name: 'notes.txt', mediaType: 'text/plain', size: 10 });
+    expect(await client.download(thread, ref)).toBe(`https://signed.example/${ref}?as=notes.txt`);
+    await expect(client.download(crypto.randomUUID(), ref)).rejects.toThrow(/not a file of this thread/);
+    await expect(client.download(thread, `payloads/${thread}/sessions/x.jsonl`)).rejects.toThrow(/not a file of this thread/);
+  });
+
   it('cancels, interrupts and deletes', async () => {
     const { store, client, deleted } = setup();
     const thread = crypto.randomUUID();

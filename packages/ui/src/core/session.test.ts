@@ -144,3 +144,33 @@ describe('httpTransport', () => {
     }
   });
 });
+
+describe('files', () => {
+  it('puts a message’s files on its turn', () => {
+    const file = { id: 'f1', name: 'notes.txt', mediaType: 'text/plain', size: 12, ref: 'payloads/t/files/f1/notes.txt', url: 'https://s3/x' };
+    const [turn] = applyEvent([], { type: 'CUSTOM', name: 'wasp.message', value: { messageId: 'm1', text: '', deliver: 'later', attachments: [file] } }, 'c1');
+    expect(turn).toEqual({ kind: 'user', id: 'm1', text: '', deliver: 'later', attachments: [file] });
+  });
+
+  it('posts file refs, links files through the app, and shows the API’s own error', async () => {
+    const calls: { url: string; body?: string }[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, ...(init?.body ? { body: String(init.body) } : {}) });
+      return url.endsWith('/messages') && calls.length > 1
+        ? new Response(JSON.stringify({ error: 'wasp: notes.txt was not uploaded' }), { status: 400 })
+        : new Response(JSON.stringify({ messageId: 'm', position: 0 }), { status: 201 });
+    }) as typeof fetch;
+    try {
+      const transport = httpTransport('/api/threads/t');
+      await transport.post('see attached', 'asap', ['payloads/t/files/f1/notes.txt']);
+      expect(JSON.parse(calls[0]!.body!)).toEqual({ text: 'see attached', deliver: 'asap', files: ['payloads/t/files/f1/notes.txt'] });
+      await expect(transport.post('again', 'asap', ['x'])).rejects.toThrow('wasp: notes.txt was not uploaded');
+      expect(transport.fileHref!({ id: 'f1', name: 'n', mediaType: 'text/plain', size: 1, ref: 'payloads/t/files/f1/n' })).toBe(
+        '/api/threads/t/files?ref=payloads%2Ft%2Ffiles%2Ff1%2Fn'
+      );
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});

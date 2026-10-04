@@ -19,6 +19,14 @@ without stopping. A chip in the input picks the other two modes for one message:
 
 When the input is empty, its button stops the agent; Esc does the same.
 
+## Files
+
+When the transport can upload (`httpTransport` can), the input gets an attach button. Files also come in by
+drag-and-drop anywhere on the chat, or by pasting. Each file uploads to storage as soon as it's picked, with its
+progress shown. A message can be files alone, and it is sent once the last upload finishes. Editing a queued
+message brings its files back. Files on a message show as download links. With `httpTransport`, each link asks
+your API for a fresh download when clicked, so it never expires on a page left open.
+
 ## Theming
 
 Everything is drawn from CSS variables. Set any of them on `.wasp` or on one of its ancestors:
@@ -98,9 +106,15 @@ GET    {base}/feed?after=<cursor>   → wasp.feed(id, { after })
 POST   {base}/messages              → wasp.post(id, { text, deliver })
 POST   {base}/interrupt             → wasp.interrupt(id)
 DELETE {base}/queue/{messageId}     → { result: wasp.cancel(id, messageId) }
+POST   {base}/uploads               → wasp.upload(id, { name, mediaType, size })
+GET    {base}/files?ref=            → redirect to wasp.download(id, ref)
 ```
 
-You can also write your own `WaspTransport`: four functions.
+`POST {base}/messages` also carries `files`, the refs from uploads, for `wasp.post`. An error answered as
+`{ error }` is shown as it is. The browser sends the file itself straight to storage, to the URL that
+`wasp.upload` signed, so a strict CSP must allow that origin in `connect-src`.
+
+You can also write your own `WaspTransport`: four functions, plus `upload` and `fileHref` for files.
 
 ## No build step
 

@@ -71,4 +71,20 @@ export const Clock = () => (
     <path d="M12 7v5l3 2" />
   </svg>
 );
+export const Paperclip = () => (
+  <svg {...base}>
+    <path d="m21.4 11.1-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9" />
+  </svg>
+);
+export const FileIcon = () => (
+  <svg {...base}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 3v5h5" />
+  </svg>
+);
+export const Download = () => (
+  <svg {...base}>
+    <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+  </svg>
+);
 export const Spinner = () => <span className="wasp-spinner" aria-hidden="true" />;

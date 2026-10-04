@@ -8,3 +8,4 @@ export { WaspTimeline } from './react/Timeline.tsx';
 export { WaspComposer, WaspError, WaspQueue } from './react/Composer.tsx';
 export { CodeBlock, Markdown } from './react/Markdown.tsx';
 export { type WaspLabels, labelsEn, labelsFr } from './react/labels.ts';
+export { type Attachments, DEFAULT_FILE_LIMITS, type FileLimits, type PendingFile, formatBytes } from './react/attachments.ts';

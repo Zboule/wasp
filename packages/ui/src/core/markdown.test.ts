@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseInline, parseMarkdown } from './markdown.ts';
+import { formatBytes } from '../react/attachments.ts';
 import { toolLabel, toolSummary } from './tools.ts';
 
 describe('parseMarkdown', () => {
@@ -15,7 +16,14 @@ describe('parseMarkdown', () => {
 
   it('reads a table, with its alignment', () => {
     const [table] = parseMarkdown('| name | size |\n|:--|--:|\n| a | 1 |\n| b | 22 |');
-    expect(table).toMatchObject({ type: 'table', align: ['left', 'right'], rows: [[[{ text: 'a' }], [{ text: '1' }]], [[{ text: 'b' }], [{ text: '22' }]]] });
+    expect(table).toMatchObject({
+      type: 'table',
+      align: ['left', 'right'],
+      rows: [
+        [[{ text: 'a' }], [{ text: '1' }]],
+        [[{ text: 'b' }], [{ text: '22' }]]
+      ]
+    });
   });
 
   it('keeps a code fence that is still streaming open to the end', () => {
@@ -59,7 +67,13 @@ describe('parseInline: the agent is untrusted', () => {
 
   it('reads inline styles, nested', () => {
     expect(parseInline('**bold _and em_** ~~gone~~ `a*b*c`')).toEqual([
-      { type: 'strong', children: [{ type: 'text', text: 'bold ' }, { type: 'em', children: [{ type: 'text', text: 'and em' }] }] },
+      {
+        type: 'strong',
+        children: [
+          { type: 'text', text: 'bold ' },
+          { type: 'em', children: [{ type: 'text', text: 'and em' }] }
+        ]
+      },
       { type: 'text', text: ' ' },
       { type: 'del', children: [{ type: 'text', text: 'gone' }] },
       { type: 'text', text: ' ' },
@@ -78,5 +92,11 @@ describe('tools', () => {
     expect(toolSummary('{"command":"ls -la","description":"List"}')).toBe('ls -la');
     expect(toolSummary('{"file_path":"/tmp/a.txt"}')).toBe('/tmp/a.txt');
     expect(toolSummary('{"comm')).toBe('');
+  });
+});
+
+describe('formatBytes', () => {
+  it('reads like a file manager', () => {
+    expect([formatBytes(512), formatBytes(1536), formatBytes(25 * 1024 * 1024), formatBytes(150 * 1024)]).toEqual(['512 B', '1.5 KB', '25 MB', '150 KB']);
   });
 });

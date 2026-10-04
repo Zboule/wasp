@@ -56,7 +56,7 @@ function Playground() {
         <label>
           <input type="checkbox" checked={empty} onChange={(e) => setEmpty(e.target.checked)} /> empty thread
         </label>
-        <span>Say “long” for a slow turn, “fail” for errors.</span>
+        <span>Say “long” for a slow turn, “fail” for errors. Attach, drop or paste files (a name with “fail” fails).</span>
       </div>
       <div className={`pg-stage ${host}`}>
         <div className={`pg-frame${phone ? ' phone' : ''}`}>
