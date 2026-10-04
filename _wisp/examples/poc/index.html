@@ -1,0 +1,119 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>wisp · demo</title>
+<style>
+  :root { --accent: #f4762c; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #faf6f0;
+    color: #2c2a27;
+  }
+  .app { max-width: 640px; margin: 0 auto; padding: 24px 16px 120px; }
+  header h1 { font-size: 22px; margin: 0 0 2px; }
+  header p { color: #8b8378; margin: 0 0 20px; font-size: 14px; }
+  .note {
+    background: #fff; border: 1px solid #ece4d8; border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+    animation: pop 0.25s ease;
+  }
+  @keyframes pop { from { transform: translateY(6px); opacity: 0; } }
+  .empty { text-align: center; color: #b4ab9d; padding: 60px 0; }
+  .empty .em { font-size: 40px; }
+  .banner {
+    background: #eaf7ee; border: 1px solid #b9e3c6; color: #2e7d4f;
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; font-weight: 600;
+  }
+
+  /* Floating summon button + slide-up panel — the book-builder embed pattern. */
+  .fab {
+    position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom));
+    width: 60px; height: 60px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; font-size: 26px; cursor: pointer;
+    box-shadow: 0 6px 20px rgb(244 118 44 / 0.45); z-index: 20;
+  }
+  .sheet {
+    position: fixed; z-index: 25; background: #fff;
+    box-shadow: 0 -8px 40px rgb(0 0 0 / 0.22);
+    display: flex; flex-direction: column;
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* phone: bottom sheet */
+  .sheet {
+    left: 0; right: 0; bottom: 0; height: 76vh;
+    border-radius: 20px 20px 0 0; transform: translateY(105%);
+  }
+  .sheet.open { transform: translateY(0); }
+  /* desktop: right-docked panel */
+  @media (min-width: 760px) {
+    .sheet { left: auto; right: 0; top: 0; bottom: 0; width: 420px; height: 100%; border-radius: 0; transform: translateX(105%); }
+    .sheet.open { transform: translateX(0); }
+  }
+  .sheet-grip { text-align: center; padding: 8px; }
+  .sheet-grip button { border: none; background: #ece4d8; color: #8b8378; border-radius: 20px; padding: 4px 14px; font-size: 13px; cursor: pointer; }
+  #wisp { flex: 1; min-height: 0; }
+  .scrim { position: fixed; inset: 0; background: rgb(0 0 0 / 0.28); z-index: 24; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+</style>
+
+<div class="app">
+  <header>
+    <h1>📝 Notes</h1>
+    <p id="tagline">A dummy host app. Tap ✨ and ask the copilot to add notes — watch them appear here live.</p>
+    <p><a id="mode-toggle" href="?ai=1" style="color:var(--accent);font-size:13px;font-weight:600"></a></p>
+  </header>
+  <div id="banner"></div>
+  <div id="notes"></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<button class="fab" id="fab" aria-label="Open assistant">✨</button>
+<div class="sheet" id="sheet">
+  <div class="sheet-grip"><button id="close">✕ close</button></div>
+  <div id="wisp"></div>
+</div>
+
+<script src="/wisp.js"></script>
+<script>
+  const notesEl = document.getElementById("notes");
+  const bannerEl = document.getElementById("banner");
+
+  // The host app renders purely from shared agent state — same store, different renderer.
+  function renderNotes(appState) {
+    const notes = (appState && appState.notes) || [];
+    bannerEl.innerHTML = appState && appState.published ? '<div class="banner">✓ Published</div>' : "";
+    notesEl.innerHTML = notes.length
+      ? notes.map((n) => `<div class="note">${n.replace(/[<>&]/g, "")}</div>`).join("")
+      : '<div class="empty"><div class="em">🗒️</div><p>No notes yet — ask the copilot to add some.</p></div>';
+  }
+  renderNotes(null);
+
+  // Real Claude agent by default; ?mock=1 switches to the scripted demo backend.
+  const AI = !new URLSearchParams(location.search).has("mock");
+  const toggle = document.getElementById("mode-toggle");
+  toggle.href = AI ? "?mock=1" : "./";
+  toggle.textContent = AI ? "⚡ live AI — switch to the scripted mock" : "🎭 scripted mock — switch to the live AI";
+
+  Wisp.mount("#wisp", {
+    endpoint: "",
+    app: AI ? "notes-ai" : "notes",
+    sessionId: AI ? "demo-ai" : "demo",
+    title: AI ? "Notes Copilot · live" : "Notes Copilot · scripted",
+    placeholder: "e.g. add milk to the list",
+    suggestions: AI
+      ? ["Add buy milk to my notes", "Note: call the plumber tomorrow", "Publish my notes"]
+      : ["Add: buy milk", "Add: call the plumber", "I'm done — publish"],
+    onAppState: renderNotes,
+  });
+
+  // Slide-up sheet toggle (this is the ✨-button-over-the-app pattern for book-builder).
+  const sheet = document.getElementById("sheet"),
+    scrim = document.getElementById("scrim");
+  const open = () => (sheet.classList.add("open"), scrim.classList.add("open"));
+  const close = () => (sheet.classList.remove("open"), scrim.classList.remove("open"));
+  document.getElementById("fab").onclick = open;
+  document.getElementById("close").onclick = close;
+  scrim.onclick = close;
+</script>
