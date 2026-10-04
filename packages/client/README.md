@@ -25,7 +25,8 @@ The browser uploads straight to S3, so files never pass through your API (or its
 ```ts
 // 1. POST /threads/:id/uploads { name, mediaType, size }
 const { ref, url, fields } = await wasp.upload(threadId, { name, mediaType, size });
-// 2. the browser POSTs multipart form data to `url`: every entry of `fields`, then the file, last
+// 2. the browser POSTs multipart form data to `url`: every entry of `fields`, then the file, last.
+//    `size` is signed exactly: send the file's own byte count (File.size), or S3 refuses it
 // 3. POST /threads/:id/messages { text, files: [ref] }
 await wasp.post(threadId, { text, files: [ref] });
 ```
