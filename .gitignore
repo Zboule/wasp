@@ -1,5 +1,11 @@
 node_modules/
+dist/
 .env
 *.local
-deploy/.state*
+*.log
+.DS_Store
 .claude/
+.sst/
+coverage/
+packages/runner/legacy/deploy/.state*
+apps/playground/examples/poc/wisp.js
