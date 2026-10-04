@@ -1,5 +1,5 @@
 // Builds what ships inside @zboule/wasp-infra besides its code:
-//   image/              the runner image context (bundled engine, Dockerfile, the Agent SDK pin)
+//   image/              the runner image context (bundled engine, Dockerfile, the Agent SDK pin and its lockfile)
 //   assets/waker/       the waker Lambda, one bundled file
 import { build } from 'esbuild';
 import { cpSync, mkdirSync, rmSync } from 'node:fs';
@@ -24,6 +24,7 @@ await build({
 });
 cpSync(`${runner}/image/Dockerfile`, 'image/Dockerfile');
 cpSync(`${runner}/image/package.json`, 'image/package.json');
+cpSync(`${runner}/image/package-lock.json`, 'image/package-lock.json');
 
 await build({
   entryPoints: ['src/waker/handler.ts'],

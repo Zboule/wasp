@@ -18,8 +18,11 @@ export type WaspClientDeps = {
   store: ThreadStore;
   /** Encrypts a caller token so that only this thread's runner can decrypt it (KMS, encryption context `{ threadId }`). */
   encryptToken(threadId: string, token: string): Promise<string>;
-  /** Turns a stored payload reference (`payloads/<threadId>/…`) into a short-lived URL; with `download`, one that saves the file under that name. */
-  presign(ref: string, options?: { download?: string }): Promise<string>;
+  /**
+   * Turns a stored payload reference (`payloads/<threadId>/…`) into a short-lived URL; with `download`, one that saves the
+   * file under that name; with `asText`, one served as `text/plain` whatever type the object was stored with.
+   */
+  presign(ref: string, options?: { download?: string; asText?: boolean }): Promise<string>;
   /** A short-lived S3 POST that accepts exactly one object at `ref`, of this type and exactly `size` bytes. */
   presignUpload(ref: string, options: { mediaType: string; size: number }): Promise<{ url: string; fields: Record<string, string> }>;
   /** What S3 holds at `ref`, or null when nothing was uploaded there. */
@@ -85,7 +88,9 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
    * read the whole bucket: only this thread's objects get a URL, or an agent
    * could plant a ref that hands its user another thread's transcript.
    */
-  const payloadUrl = (threadId: string, ref: string) => (isPayloadRef(threadId, ref) ? deps.presign(ref) : undefined);
+  const payloadUrl = (threadId: string, ref: string) =>
+    // The agent can store any object under its own prefix, an HTML page included: never let one render as a page.
+    isPayloadRef(threadId, ref) ? deps.presign(ref, { asText: true }) : undefined;
 
   /** Id and name come from the ref, which is what the URL serves. A ref that is not this thread's file is dropped. */
   const withUrls = async (threadId: string, files: WaspFile[]): Promise<WaspFile[]> =>

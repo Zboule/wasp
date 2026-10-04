@@ -88,6 +88,38 @@ describe('runner server', () => {
     slow.open();
   });
 
+  it('asks again a minute later when a request for fresh credentials failed', async () => {
+    let clock = Date.now();
+    const store = createMemoryStore();
+    let failures = 1;
+    const requests: number[] = [];
+    const flaky = {
+      ...store,
+      async requestCredentials(threadId: string, at: number) {
+        requests.push(at);
+        if (failures-- > 0) throw new Error('throttled');
+        await store.requestCredentials(threadId, at);
+      }
+    };
+    const slow = gate();
+    const { agent } = scriptedAgent(() => [{ tool: 'work', until: slow.promise }]);
+    const logs: string[] = [];
+    const { invoke } = await start({ now: () => clock, log: (m) => logs.push(m), forThread: () => ({ store: flaky, agent }) });
+    const thread = crypto.randomUUID();
+    await store.enqueue(thread, { id: 'm1', text: 'slow', deliver: 'later', createdAt: 1 });
+    await invoke(thread, { op: 'drain', credentials: { ...credentials, expiration: new Date(clock + 5 * 60_000).toISOString() } });
+
+    await until(async () => requests.length === 1);
+    expect(logs.some((m) => m.includes('throttled'))).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toHaveLength(1);
+
+    clock += 60_000;
+    await until(async () => store.signals(thread).credentials === 1);
+    expect(requests).toHaveLength(2);
+    slow.open();
+  });
+
   it('builds storage only from the credentials the waker sent, and takes refreshed ones', async () => {
     const { store, seen, invoke } = await start();
     const thread = crypto.randomUUID();

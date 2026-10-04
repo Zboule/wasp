@@ -39,10 +39,11 @@ ever holds credentials scoped to its own thread.
 |---|---|---|
 | Runtime execution role (ambient in the microVM) | ECR pull, CloudWatch logs. **No data.** | IAM |
 | Thread role session policy | DynamoDB `LeadingKeys = T#<threadId>`; S3 `sessions/<threadId>/*`, `payloads/<threadId>/*`; KMS decrypt with `kms:EncryptionContext:threadId = <threadId>` | IAM / STS session policy |
-| Credential lifetime | ≤ 1 hour (role chaining). Refreshed by the waker on a second invoke to the same session. | STS |
+| Credential lifetime | ≤ 1 hour (role chaining). The runner asks for a refresh from 10 minutes before expiry, again every minute until it arrives; the waker answers with a second invoke to the same session. | STS |
 | Caller tokens | encrypted by the client with context `{ threadId }`, decryptable only through the thread role | KMS |
 | App data | only through the app's MCP server with the caller's token | the app |
 | User files | uploaded by the browser with a presigned POST for one key, `payloads/<threadId>/files/<fileId>/<name>`, signed by the app's role (`s3:PutObject` on `payloads/*/files/*` only). Inside the thread's own prefix, so the session policy is unchanged. Downloads are presigned with `Content-Disposition: attachment`, so an uploaded page never runs on the bucket's origin. | IAM, S3 POST policy |
+| Tool payloads (`outputRef`, `argsRef`) | written by the agent under `payloads/<threadId>/`, with any content type it chooses. Presigned with `Content-Type: text/plain; charset=utf-8`, so they open as text in a tab and an agent-written page never runs on the bucket's origin. | the client's presign |
 
 Refs the client signs: the agent can write its own feed and queue, so any
 S3 key stored there (a file's `ref`, a tool result's `outputRef` or `argsRef`)
@@ -74,15 +75,26 @@ These are **not** bugs. A compromised agent is the owner of its own thread.
 
 ## Verification
 
-**Escape test (E2E, `apps/demo`).** The demo agent is told to:
+**Session policy, exactly (unit test, CI).** `packages/infra/src/waker/waker.test.ts`
+compares `threadSessionPolicy` with the full expected document, statement by
+statement, and checks that another thread's id appears nowhere in it. Changing
+what a runner's credentials reach therefore means changing that test on purpose.
+It checks the policy we write, not what AWS does with it: it does not catch a
+storage key that leaves the thread prefix, and it does not exercise IAM.
+
+**Escape test (E2E): not built yet.** It is planned (README, *Next*), and is
+the test that will prove the boundary against a deployed stack. The demo agent
+will be told to:
 
 1. call AWS with the microVM's ambient credentials (list the table, read the bucket)
 2. read another thread's DynamoDB items and S3 transcript
 3. write an item into another thread's partition
 4. decrypt a caller token that belongs to another thread
 
-The test asserts that each attempt is denied (the tool output shows `AccessDenied`),
-and that the other thread's feed and transcript are byte-for-byte unchanged.
+and the test will assert that each attempt is denied (the tool output shows
+`AccessDenied`), and that the other thread's feed and transcript are
+byte-for-byte unchanged. Until it exists, a boundary change is verified by hand
+against a deployed stack, and the change says how.
 
 Any change to IAM, storage keys, credentials or the runner/agent boundary must
-keep this test green, and must update this page in the same change.
+keep these tests green, and must update this page in the same change.

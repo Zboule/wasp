@@ -60,20 +60,41 @@ describe('threadSessionPolicy', () => {
   const targets = { tableArn: 'arn:aws:dynamodb:eu-west-1:1:table/wasp', bucketArn: 'arn:aws:s3:::wasp', keyArn: 'arn:aws:kms:eu-west-1:1:key/k' };
   const policy = JSON.parse(threadSessionPolicy(T1, targets));
 
-  it('reaches only this thread: its partition, its prefixes, its tokens', () => {
-    const text = JSON.stringify(policy);
-    expect(text).toContain(`"T#${T1}"`);
-    expect(text).toContain(`sessions/${T1}/*`);
-    expect(text).toContain(`"kms:EncryptionContext:threadId":"${T1}"`);
-    expect(text).not.toContain(T2);
-    expect(text).not.toMatch(/"Resource":"\*"|arn:aws:s3:::wasp\/\*"/);
+  // The thread boundary's only automated check until the E2E escape test exists
+  // (docs/security-model.md, Verification). Widening it means editing this on purpose.
+  it('is exactly this document: its partition, its prefixes, its tokens, nothing else', () => {
+    expect(policy).toEqual({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem', 'dynamodb:Query', 'dynamodb:BatchWriteItem'],
+          Resource: 'arn:aws:dynamodb:eu-west-1:1:table/wasp',
+          Condition: { 'ForAllValues:StringEquals': { 'dynamodb:LeadingKeys': [`T#${T1}`] } }
+        },
+        {
+          Effect: 'Allow',
+          Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+          Resource: [`arn:aws:s3:::wasp/sessions/${T1}/*`, `arn:aws:s3:::wasp/payloads/${T1}/*`]
+        },
+        {
+          Effect: 'Allow',
+          Action: 's3:ListBucket',
+          Resource: 'arn:aws:s3:::wasp',
+          Condition: { StringLike: { 's3:prefix': [`sessions/${T1}/*`, `payloads/${T1}/*`] } }
+        },
+        {
+          Effect: 'Allow',
+          Action: 'kms:Decrypt',
+          Resource: 'arn:aws:kms:eu-west-1:1:key/k',
+          Condition: { StringEquals: { 'kms:EncryptionContext:threadId': T1 } }
+        }
+      ]
+    });
   });
 
-  it('allows listing only under the thread prefixes, and never encryption or IAM', () => {
-    const list = policy.Statement.find((s: { Action: unknown }) => s.Action === 's3:ListBucket');
-    expect(list.Condition.StringLike['s3:prefix']).toEqual([`sessions/${T1}/*`, `payloads/${T1}/*`]);
-    const actions = policy.Statement.flatMap((s: { Action: string | string[] }) => [s.Action].flat());
-    expect(actions.some((a: string) => a.startsWith('iam:') || a.startsWith('sts:') || a === 'kms:Encrypt')).toBe(false);
+  it('names no other thread', () => {
+    expect(threadSessionPolicy(T1, targets)).not.toContain(T2);
   });
 
   it('stays under the 2048-character session policy limit', () => {
