@@ -1,7 +1,7 @@
 import type { FeedEntry, FeedPage } from '@zboule/wasp-protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import { type WaspTransport, createWaspSession, httpTransport } from './session.ts';
+import { type WaspSessionState, type WaspTransport, createWaspSession, httpTransport, pendingMessages } from './session.ts';
 import { applyEvent } from './timeline.ts';
 
 const entry = (cursor: string, event: FeedEntry['event']): FeedEntry => ({ cursor, at: 0, event });
@@ -78,7 +78,7 @@ describe('createWaspSession', () => {
     expect(await session.cancel('q1')).toBe('cancelled');
     await session.interrupt();
     await session.post('by default');
-    expect(calls).toEqual(['feed:null', 'post:now:stop that', 'feed:c1', 'cancel:q1', 'feed:c1', 'interrupt', 'feed:c1', 'post:asap:by default', 'feed:c1']);
+    expect(calls).toEqual(['feed:null', 'post:now:stop that', 'feed:c1', 'cancel:q1', 'feed:c1', 'interrupt', 'feed:c1', 'post:later:by default', 'feed:c1']);
   });
 
   it('keeps what it has when the API fails, and says so', async () => {
@@ -92,6 +92,169 @@ describe('createWaspSession', () => {
     });
     await session.refresh();
     expect(session.store.getState()).toMatchObject({ error: 'GET /feed → 401', loaded: false, timeline: [] });
+  });
+});
+
+describe('a message on its way', () => {
+  const message = (messageId: string, text: string): FeedEntry['event'] => ({ type: 'CUSTOM', name: 'wasp.message', value: { messageId, text, deliver: 'later' } });
+
+  /** A thread whose API answers when told to, and whose feed is set by the test. */
+  function thread() {
+    let page: FeedPage = { state: 'idle', queue: [], entries: [], cursor: null };
+    let answer: (() => void) | null = null;
+    let refuse: ((error: Error) => void) | null = null;
+    const posts: string[] = [];
+    const transport: WaspTransport = {
+      feed: async (after) => {
+        const out = page;
+        page = { ...page, entries: [], cursor: page.cursor ?? after };
+        return out;
+      },
+      post: (text, deliver) =>
+        new Promise((resolve, reject) => {
+          posts.push(`${deliver}:${text}`);
+          answer = () => resolve({ messageId: `id:${text}`, position: 0 });
+          refuse = reject;
+        }),
+      interrupt: async () => undefined,
+      cancel: async () => 'cancelled'
+    };
+    return {
+      transport,
+      posts,
+      setPage: (next: Partial<FeedPage>) => (page = { ...page, ...next }),
+      answer: () => answer!(),
+      refuse: (error: Error) => refuse!(error)
+    };
+  }
+
+  it('shows at once, lands in the conversation, and is never shown twice', async () => {
+    const t = thread();
+    const session = createWaspSession(t.transport);
+    await session.refresh();
+
+    const sent = session.post('hello');
+    // Before the API has answered: in the conversation, being sent.
+    expect(pendingMessages(session.store.getState())).toEqual({ landing: [{ id: 'out:1', text: 'hello', deliver: 'later', sending: true }], waiting: [] });
+
+    t.setPage({ state: 'waking_up', queue: [{ id: 'id:hello', text: 'hello', deliver: 'later', createdAt: 1 }] });
+    t.answer();
+    await sent;
+    expect(pendingMessages(session.store.getState()).landing).toEqual([{ id: 'id:hello', text: 'hello', deliver: 'later', sending: false }]);
+
+    // Claimed, the feed not showing it yet: it stays where it was.
+    t.setPage({ state: 'working', queue: [] });
+    await session.refresh();
+    expect(pendingMessages(session.store.getState()).landing.map((m) => m.id)).toEqual(['id:hello']);
+
+    t.setPage({ entries: [entry('c1', message('id:hello', 'hello'))], cursor: 'c1' });
+    await session.refresh();
+    const state = session.store.getState();
+    expect(state.outbox).toEqual([]);
+    expect(state.timeline).toEqual([{ kind: 'user', id: 'id:hello', text: 'hello', deliver: 'later' }]);
+  });
+
+  it('forgets a message the feed showed before the API answered', async () => {
+    const t = thread();
+    const session = createWaspSession(t.transport);
+    const sent = session.post('quick');
+    t.setPage({ state: 'working', entries: [entry('c1', message('id:quick', 'quick'))], cursor: 'c1' });
+    await session.refresh();
+    t.answer();
+    await sent;
+    expect(session.store.getState().outbox).toEqual([]);
+  });
+
+  it('takes a refused message back out, and says why', async () => {
+    const t = thread();
+    const session = createWaspSession(t.transport);
+    const sent = session.post('nope');
+    t.refuse(new Error('wasp: a message is limited to 100000 characters'));
+    await expect(sent).rejects.toThrow('limited');
+    expect(session.store.getState().outbox).toEqual([]);
+  });
+});
+
+describe('pendingMessages', () => {
+  const queued = (id: string, deliver: 'later' | 'asap' = 'later') => ({ id, text: id, deliver, createdAt: 1 });
+  const state = (s: Partial<WaspSessionState>) => ({ queue: [], outbox: [], running: false, ...s });
+
+  it('queues behind a running turn', () => {
+    expect(pendingMessages(state({ running: true, queue: [queued('a'), queued('b')] }))).toMatchObject({ landing: [], waiting: [{ id: 'a' }, { id: 'b' }] });
+  });
+
+  it('lands the message the next turn starts with, the others still wait', () => {
+    expect(pendingMessages(state({ queue: [queued('a'), queued('b')] }))).toMatchObject({ landing: [{ id: 'a' }], waiting: [{ id: 'b' }] });
+    // Claimed by the runner: that one lands, the queue waits.
+    const claimed = { key: 'out:1', messageId: 'c', text: 'c', deliver: 'later' as const, queued: true };
+    expect(pendingMessages(state({ queue: [queued('a')], outbox: [claimed] }))).toMatchObject({ landing: [{ id: 'c' }], waiting: [{ id: 'a' }] });
+  });
+
+  it('keeps a message the API just took in the queue until a poll has seen it there', () => {
+    const answered = { key: 'out:1', messageId: 'b', text: 'b', deliver: 'later' as const };
+    expect(pendingMessages(state({ running: true, queue: [queued('a')], outbox: [answered] }))).toMatchObject({
+      landing: [],
+      waiting: [{ id: 'a' }, { id: 'b', sending: true }]
+    });
+  });
+});
+
+describe('sendNow', () => {
+  const later = { id: 'q1', text: 'also this', deliver: 'later' as const, createdAt: 1 };
+
+  function transport(cancel: 'cancelled' | 'delivered', post?: () => Promise<unknown>) {
+    const calls: string[] = [];
+    const ids = ['q1', 'q2'];
+    let queue: (typeof later)[] = [];
+    post ??= async () => {
+      const messageId = ids.shift()!;
+      if (messageId === 'q1') queue = [later];
+      return { messageId };
+    };
+    const t: WaspTransport = {
+      feed: async (after) => ({ state: 'working', queue, entries: [], cursor: after }),
+      post: async (text, deliver) => {
+        calls.push(`post:${deliver}:${text}`);
+        return post();
+      },
+      interrupt: async () => undefined,
+      cancel: async (id) => {
+        calls.push(`cancel:${id}`);
+        if (cancel === 'cancelled') queue = [];
+        return cancel;
+      }
+    };
+    return { t, calls };
+  }
+
+  it('sends a queued message again for the next step, without it ever leaving the queue view', async () => {
+    const { t, calls } = transport('cancelled');
+    const session = createWaspSession(t);
+    await session.post('also this');
+    const done = session.sendNow(later);
+    // Replaced by itself, being sent: never two rows, never none.
+    expect(pendingMessages({ ...session.store.getState(), running: true }).waiting).toEqual([{ id: 'out:2', text: 'also this', deliver: 'asap', sending: true }]);
+    expect(await done).toBe('cancelled');
+    expect(calls).toEqual(['post:later:also this', 'cancel:q1', 'post:asap:also this']);
+    // The message as first sent is gone too: only its asap copy remains.
+    expect(session.store.getState().outbox.map((o) => o.messageId)).toEqual(['q2']);
+  });
+
+  it('does nothing when the agent took it first', async () => {
+    const { t, calls } = transport('delivered');
+    const session = createWaspSession(t);
+    expect(await session.sendNow(later)).toBe('delivered');
+    expect(calls).toEqual(['cancel:q1']);
+    expect(session.store.getState().outbox).toEqual([]);
+  });
+
+  it('says so when it left the queue but could not be sent again', async () => {
+    const { t } = transport('cancelled', async () => {
+      throw new Error('POST /messages → 500');
+    });
+    const session = createWaspSession(t);
+    expect(await session.sendNow(later)).toBe('unsent');
+    expect(session.store.getState()).toMatchObject({ outbox: [], error: 'POST /messages → 500' });
   });
 });
 

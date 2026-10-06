@@ -1,6 +1,7 @@
 import type { WaspFile } from '@zboule/wasp-protocol';
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 
+import { pendingMessages } from '../core/session.ts';
 import type { TimelineItem, ToolItem } from '../core/timeline.ts';
 import { formatArgs, parseArgs, toolLabel, toolSummary } from '../core/tools.ts';
 import { useWasp } from './context.tsx';
@@ -45,7 +46,10 @@ export function WaspTimeline() {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   };
 
-  const empty = state.loaded && state.timeline.length === 0 && state.queue.length === 0 && state.state === 'idle';
+  const { landing, waiting } = pendingMessages(state);
+  const empty = state.loaded && state.timeline.length === 0 && landing.length === 0 && waiting.length === 0 && state.state === 'idle';
+  // Idle with a message on its way: the API has it, or is about to, and the agent starts next.
+  const starting = state.loaded && (state.state === 'waking_up' || (state.state === 'idle' && landing.length > 0));
   const Empty = components.Empty;
   const emptyBody = (
     <div className="wasp-empty">
@@ -83,7 +87,10 @@ export function WaspTimeline() {
             <Item key={`${group.kind}:${group.id}`} item={group} streaming={state.state === 'working'} />
           )
         )}
-        {state.state === 'waking_up' && (
+        {landing.map(({ id, text, deliver, attachments }) => (
+          <Item key={`user:${id}`} item={{ kind: 'user', id, text, deliver, ...(attachments ? { attachments } : {}) }} streaming={false} pending />
+        ))}
+        {starting && (
           <div className="wasp-status">
             <Spinner /> {labels.wakingUp}
           </div>
@@ -119,15 +126,16 @@ function groupTools(timeline: TimelineItem[]): (Exclude<TimelineItem, ToolItem> 
   return out;
 }
 
-function Item({ item, streaming }: { item: Exclude<TimelineItem, ToolItem>; streaming: boolean }) {
+/** `pending`: a message of the user's that the agent has not read yet. */
+function Item({ item, streaming, pending }: { item: Exclude<TimelineItem, ToolItem>; streaming: boolean; pending?: boolean }) {
   const { labels, components } = useWasp();
   switch (item.kind) {
     case 'user': {
       const body = (
-        <div className="wasp-turn user">
+        <div className={`wasp-turn user${pending ? ' pending' : ''}`}>
           {item.attachments && item.attachments.length > 0 && <Attachments files={item.attachments} />}
           {item.text && <div className="wasp-bubble">{item.text}</div>}
-          {item.deliver !== 'later' && <div className="wasp-meta">{labels.deliveredMidTurn[item.deliver]}</div>}
+          {!pending && item.deliver !== 'later' && <div className="wasp-meta">{labels.deliveredMidTurn[item.deliver]}</div>}
         </div>
       );
       const UserMessage = components.UserMessage;

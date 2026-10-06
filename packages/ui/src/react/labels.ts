@@ -13,6 +13,8 @@ export type WaspLabels = {
   queued: (count: number) => string;
   cancel: string;
   edit: string;
+  sendNow: string;
+  sendNowHint: string;
   deliver: Record<Deliver, { label: string; hint: string }>;
   deliveredMidTurn: Record<Exclude<Deliver, 'later'>, string>;
   interrupted: string;
@@ -49,6 +51,8 @@ export const labelsEn: WaspLabels = {
   queued: (n) => (n === 1 ? '1 queued' : `${n} queued`),
   cancel: 'Remove from the queue',
   edit: 'Edit',
+  sendNow: 'Send now',
+  sendNowHint: 'The agent reads it at its next step, without stopping',
   deliver: {
     asap: { label: 'Next', hint: 'The agent reads it at its next step' },
     later: { label: 'After this turn', hint: 'Waits until the agent is done' },
@@ -89,6 +93,8 @@ export const labelsFr: WaspLabels = {
   queued: (n) => `${n} en attente`,
   cancel: 'Retirer de la file',
   edit: 'Modifier',
+  sendNow: 'Envoyer maintenant',
+  sendNowHint: 'L’agent le lit à sa prochaine étape, sans s’arrêter',
   deliver: {
     asap: { label: 'Ensuite', hint: 'L’agent le lit à sa prochaine étape' },
     later: { label: 'Après ce tour', hint: 'Attend que l’agent ait fini' },

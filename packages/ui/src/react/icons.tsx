@@ -54,11 +54,6 @@ export const Chevron = () => (
     <path d="m9 6 6 6-6 6" />
   </svg>
 );
-export const ChevronUp = () => (
-  <svg {...base}>
-    <path d="m6 15 6-6 6 6" />
-  </svg>
-);
 export const Copy = () => (
   <svg {...base}>
     <rect x="9" y="9" width="12" height="12" rx="2" />

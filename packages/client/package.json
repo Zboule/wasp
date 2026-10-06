@@ -1,6 +1,6 @@
 {
   "name": "@zboule/wasp-client",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Call wasp from your API: post messages to a thread, read its feed, interrupt, cancel.",
   "keywords": [
     "wasp",

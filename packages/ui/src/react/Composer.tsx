@@ -1,24 +1,19 @@
-import type { Deliver, QueuedMessage } from '@zboule/wasp-protocol';
+import type { QueuedMessage, WaspFile } from '@zboule/wasp-protocol';
 import { type ClipboardEvent, type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { pendingMessages } from '../core/session.ts';
 import { type PendingFile, formatBytes } from './attachments.ts';
 import { useWasp } from './context.tsx';
-import { Alert, ArrowUp, ChevronUp, Clock, Close, FileIcon, Paperclip, Pencil, Spinner, Stop } from './icons.tsx';
-
-const ORDER: Deliver[] = ['asap', 'later', 'now'];
+import { Alert, ArrowUp, Clock, Close, FileIcon, Paperclip, Pencil, Spinner, Stop } from './icons.tsx';
 
 /**
  * The input, with its action inside it: send, or stop while the agent works
- * and nothing is typed. While it works, a chip picks how a message is
- * delivered: next step (the default), after the turn, or interrupting it.
+ * and nothing is typed. A message sent while the agent works waits for its
+ * turn to end; the queue can send it now.
  */
 export function WaspComposer() {
   const { state, session, labels, defaultDeliver, draft, setDraft, composerRef, attachments, send } = useWasp();
-  const [deliver, setDeliver] = useState<Deliver>(defaultDeliver);
-  const [menu, setMenu] = useState(false);
-  const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
-  const chip = useRef<HTMLDivElement>(null);
   const picker = useRef<HTMLInputElement>(null);
 
   const working = state.state === 'working';
@@ -26,10 +21,9 @@ export function WaspComposer() {
   const hasText = draft.trim().length > 0;
   const hasFiles = attachments.refs.length > 0;
   // Files upload as soon as they are picked; a message waits for the last one.
-  const canSend = (hasText || hasFiles) && !attachments.uploading && !sending;
+  const canSend = (hasText || hasFiles) && !attachments.uploading;
   const showStop = working && !hasText && attachments.items.length === 0;
 
-  useEffect(() => setDeliver(defaultDeliver), [defaultDeliver]);
   // Stopping ends when the run does: the thread goes idle, or a queued message
   // starts the next run straight away (a new "stopped" notice marks the end).
   const stops = state.timeline.filter((i) => i.kind === 'notice' && i.code === 'interrupted').length;
@@ -46,25 +40,18 @@ export function WaspComposer() {
     el.style.height = `${el.scrollHeight}px`;
   }, [draft, composerRef]);
 
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: MouseEvent) => {
-      if (!chip.current?.contains(e.target as Node)) setMenu(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [menu]);
-
+  // The input clears at once: the message shows where it is going while the
+  // API takes it, and comes back here only if the API refuses it.
   const submit = async () => {
     if (!canSend) return;
-    setSending(true);
-    const ok = await send(draft, busy ? deliver : 'later', attachments.refs);
-    setSending(false);
-    if (ok) {
-      setDraft('');
-      attachments.clear();
-      setDeliver(defaultDeliver);
-      composerRef.current?.focus();
+    const text = draft;
+    const files = attachments.items.flatMap((f): WaspFile[] => (f.status === 'ready' && f.ref ? [{ id: f.key, name: f.name, mediaType: '', size: f.size, ref: f.ref }] : []));
+    setDraft('');
+    attachments.clear();
+    composerRef.current?.focus();
+    if (!(await send(text, defaultDeliver, files.map((f) => f.ref), files))) {
+      setDraft((current) => (current.trim() ? `${text}\n${current}` : text));
+      attachments.restore(files);
     }
   };
   const stop = async () => {
@@ -91,14 +78,13 @@ export function WaspComposer() {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void submit();
-    } else if (e.key === 'Escape') {
-      if (menu) setMenu(false);
-      else if (working && !hasText) void stop();
+    } else if (e.key === 'Escape' && working && !hasText) {
+      void stop();
     }
   };
 
   return (
-    <div className="wasp-composer" data-deliver={busy ? deliver : undefined}>
+    <div className="wasp-composer">
       {attachments.items.length > 0 && (
         <ul className="wasp-chips">
           {attachments.items.map((f) => (
@@ -142,42 +128,6 @@ export function WaspComposer() {
             />
           </>
         )}
-        {busy && (
-          <div className="wasp-deliver" ref={chip}>
-            <button
-              type="button"
-              className={`wasp-chip ${deliver}`}
-              aria-haspopup="menu"
-              aria-expanded={menu}
-              onClick={() => setMenu(!menu)}
-              title={labels.deliver[deliver].hint}
-            >
-              {labels.deliver[deliver].label}
-              <ChevronUp />
-            </button>
-            {menu && (
-              <div className="wasp-menu" role="menu">
-                {ORDER.map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={deliver === d}
-                    className={deliver === d ? 'on' : ''}
-                    onClick={() => {
-                      setDeliver(d);
-                      setMenu(false);
-                      composerRef.current?.focus();
-                    }}
-                  >
-                    <strong>{labels.deliver[d].label}</strong>
-                    <span>{labels.deliver[d].hint}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
         <span className="wasp-spacer" />
         {showStop ? (
           <button
@@ -199,7 +149,7 @@ export function WaspComposer() {
             aria-label={labels.send}
             title={attachments.uploading ? labels.uploading : labels.send}
           >
-            {sending ? <Spinner /> : <ArrowUp />}
+            <ArrowUp />
           </button>
         )}
       </div>
@@ -217,23 +167,32 @@ export function WaspError() {
   ) : null;
 }
 
-/** Messages waiting for the agent. Remove one, or take it back to edit it. */
+/**
+ * Messages waiting behind the running turn. Send one now (the agent reads it at
+ * its next step), take it back to edit it, or remove it.
+ */
 export function WaspQueue() {
   const { state, session, labels, setDraft, composerRef, attachments } = useWasp();
   const [pending, setPending] = useState<string | null>(null);
-  if (state.queue.length === 0) return null;
+  const { waiting } = pendingMessages(state);
+  if (waiting.length === 0) return null;
 
-  const act = async (m: QueuedMessage, edit: boolean) => {
+  const act = async (m: QueuedMessage, action: 'now' | 'edit' | 'remove') => {
     setPending(m.id);
+    // Only a message that really left the queue goes back to the input: if the
+    // agent took it first, it is in the conversation already. Its files were
+    // uploaded already, so they come back as they are.
+    const takeBack = () => {
+      if (m.text) setDraft((current) => (current.trim() ? `${current}\n${m.text}` : m.text));
+      if (m.attachments?.length) attachments.restore(m.attachments);
+      composerRef.current?.focus();
+    };
     try {
-      const result = await session.cancel(m.id);
-      // Only a message that really left the queue goes back to the input: if
-      // the agent took it first, it is in the conversation already. Its files
-      // were uploaded already, so they come back as they are.
-      if (edit && result === 'cancelled') {
-        if (m.text) setDraft((current) => (current.trim() ? `${current}\n${m.text}` : m.text));
-        if (m.attachments?.length) attachments.restore(m.attachments);
-        composerRef.current?.focus();
+      if (action === 'now') {
+        // Out of the queue, but not sent again: it must not be lost.
+        if ((await session.sendNow(m)) === 'unsent') takeBack();
+      } else if ((await session.cancel(m.id)) === 'cancelled' && action === 'edit') {
+        takeBack();
       }
     } catch (error) {
       session.store.setState({
@@ -245,40 +204,48 @@ export function WaspQueue() {
   };
 
   return (
-    <div className="wasp-queue" aria-label={labels.queued(state.queue.length)}>
+    <div className="wasp-queue" aria-label={labels.queued(waiting.length)}>
       <div className="wasp-queue-head">
         <Clock />
-        {labels.queued(state.queue.length)}
+        {labels.queued(waiting.length)}
       </div>
       <ul>
-        {state.queue.map((m) => (
-          <li key={m.id} className={pending === m.id ? 'pending' : undefined}>
-            {/* "After this turn" only means something while a turn is running. */}
-            {(m.deliver !== 'later' || state.state === 'working') && <span className={`wasp-badge ${m.deliver}`}>{labels.deliver[m.deliver].label}</span>}
-            {/* A message of files alone is named by its files. */}
-            <span className="wasp-queue-text" title={m.text || undefined}>
-              {m.text || m.attachments?.map((f) => f.name).join(', ')}
-            </span>
-            {m.attachments && m.attachments.length > 0 && (
-              <span className="wasp-queue-files" title={m.attachments.map((f) => f.name).join('\n')}>
-                <Paperclip />
-                {labels.attachments(m.attachments.length)}
+        {waiting.map((p) => {
+          const queued = state.queue.find((q) => q.id === p.id);
+          const busy = p.sending || !queued || pending === p.id;
+          return (
+            <li key={p.id} className={busy ? 'pending' : undefined}>
+              {p.deliver !== 'later' && <span className={`wasp-badge ${p.deliver}`}>{labels.deliver[p.deliver].label}</span>}
+              {/* A message of files alone is named by its files. */}
+              <span className="wasp-queue-text" title={p.text || undefined}>
+                {p.text || p.attachments?.map((f) => f.name).join(', ')}
               </span>
-            )}
-            {pending === m.id ? (
-              <Spinner />
-            ) : (
-              <>
-                <button type="button" className="wasp-icon-btn" onClick={() => void act(m, true)} aria-label={labels.edit} title={labels.edit}>
-                  <Pencil />
-                </button>
-                <button type="button" className="wasp-icon-btn" onClick={() => void act(m, false)} aria-label={labels.cancel} title={labels.cancel}>
-                  <Close />
-                </button>
-              </>
-            )}
-          </li>
-        ))}
+              {p.attachments && p.attachments.length > 0 && (
+                <span className="wasp-queue-files" title={p.attachments.map((f) => f.name).join('\n')}>
+                  <Paperclip />
+                  {labels.attachments(p.attachments.length)}
+                </span>
+              )}
+              {busy ? (
+                <Spinner />
+              ) : (
+                <>
+                  {queued.deliver === 'later' && (
+                    <button type="button" className="wasp-send-now" onClick={() => void act(queued, 'now')} title={labels.sendNowHint}>
+                      {labels.sendNow}
+                    </button>
+                  )}
+                  <button type="button" className="wasp-icon-btn" onClick={() => void act(queued, 'edit')} aria-label={labels.edit} title={labels.edit}>
+                    <Pencil />
+                  </button>
+                  <button type="button" className="wasp-icon-btn" onClick={() => void act(queued, 'remove')} aria-label={labels.cancel} title={labels.cancel}>
+                    <Close />
+                  </button>
+                </>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

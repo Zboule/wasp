@@ -11,13 +11,12 @@ import '@zboule/wasp-ui/styles.css';
 
 ## How messages are delivered
 
-A message sent while the agent works goes **next** by default (`asap`): the agent reads it at its next step,
-without stopping. A chip in the input picks the other two modes for one message:
+A message shows in the conversation the moment it's sent, dimmed until the agent reads it. If the agent is
+working, it waits in the queue until the turn ends (`later`). From the queue, **Send now** has the agent read it at
+its next step without stopping (`asap`), and you can also edit or remove it. To pick a different default, pass
+`defaultDeliver`.
 
-- **After this turn** (`later`) waits until the agent is done.
-- **Interrupt** (`now`) stops the agent and sends the message.
-
-When the input is empty, its button stops the agent; Esc does the same.
+When the input is empty, its button stops the agent; Esc does the same. A queued message then starts the next turn.
 
 ## Files
 
@@ -60,7 +59,7 @@ The class names (`.wasp-*`) are stable too, if you need to restyle a detail.
 <WaspChat
   transport={transport}
   labels={labelsFr}                       // or any subset of WaspLabels: every string is replaceable
-  defaultDeliver="asap"
+  defaultDeliver="asap"                   // `later` by default: after the running turn
   suggestions={['Summarise my week']}     // offered while the thread is empty
   intro={<p>Acts as you: what it changes is recorded as your action.</p>}  // at the start of the conversation, scrolls away with it
   tools={{
