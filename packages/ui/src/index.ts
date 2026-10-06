@@ -1,4 +1,13 @@
-export { type WaspSession, type WaspSessionState, type WaspTransport, createWaspSession, httpTransport } from './core/session.ts';
+export {
+  type OutgoingMessage,
+  type PendingMessage,
+  type WaspSession,
+  type WaspSessionState,
+  type WaspTransport,
+  createWaspSession,
+  httpTransport,
+  pendingMessages
+} from './core/session.ts';
 export { type NoticeCode, type TimelineItem, type ToolItem, applyEvent } from './core/timeline.ts';
 export { type Block, type Inline, parseMarkdown, safeHref } from './core/markdown.ts';
 export { formatArgs, parseArgs, toolLabel, toolSummary } from './core/tools.ts';

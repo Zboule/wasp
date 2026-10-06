@@ -1,4 +1,4 @@
-import type { Deliver } from '@zboule/wasp-protocol';
+import type { Deliver, WaspFile } from '@zboule/wasp-protocol';
 import { type ComponentType, type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { type WaspSession, type WaspSessionState, type WaspTransport, createWaspSession } from '../core/session.ts';
@@ -43,7 +43,7 @@ export type WaspOptions = {
   labels?: Partial<WaspLabels>;
   /** `auto` follows the system. Themes that map to the host's tokens follow the host instead. */
   colorScheme?: 'auto' | 'light' | 'dark';
-  /** How a message is delivered while the agent works. `asap`: it reads it at its next step. */
+  /** How a message is delivered while the agent works. `later` (default): after its turn; a queued one can still be sent now. */
   defaultDeliver?: Deliver;
   /** Prompts offered while the thread is empty. */
   suggestions?: string[];
@@ -69,8 +69,8 @@ type WaspContextValue = {
   composerRef: React.RefObject<HTMLTextAreaElement | null>;
   /** Files on their way into the next message (when the transport can upload). */
   attachments: Attachments;
-  /** Sends a message; resolves false if it could not be sent. */
-  send: (text: string, deliver?: Deliver, files?: string[]) => Promise<boolean>;
+  /** Sends a message; resolves false if it could not be sent. `attachments` describe `files` while it is on its way. */
+  send: (text: string, deliver?: Deliver, files?: string[], attachments?: WaspFile[]) => Promise<boolean>;
 };
 
 const WaspContext = createContext<WaspContextValue | null>(null);
@@ -105,7 +105,7 @@ export function WaspRoot({ children, ...options }: WaspOptions & { children: Rea
   const labels = useMemo(() => resolveLabels(options.labels), [options.labels]);
   const [draft, setDraft] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const defaultDeliver = options.defaultDeliver ?? 'asap';
+  const defaultDeliver = options.defaultDeliver ?? 'later';
   const limits = useMemo(() => ({ ...DEFAULT_FILE_LIMITS, ...options.fileLimits }), [options.fileLimits]);
   const attachments = useAttachments(options.transport, labels, limits);
   const [dragging, setDragging] = useState(false);
@@ -125,11 +125,11 @@ export function WaspRoot({ children, ...options }: WaspOptions & { children: Rea
   );
 
   const send = useCallback(
-    async (text: string, deliver: Deliver = defaultDeliver, files: string[] = []) => {
+    async (text: string, deliver: Deliver = defaultDeliver, files: string[] = [], attachments?: WaspFile[]) => {
       const message = text.trim();
       if (!message && files.length === 0) return false;
       try {
-        await session.post(message, deliver, files);
+        await session.post(message, deliver, files, attachments);
         return true;
       } catch (error) {
         session.store.setState({

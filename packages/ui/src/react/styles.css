@@ -122,6 +122,10 @@
   align-items: flex-end;
   padding-left: 12%;
 }
+/* Sent, not read by the agent yet: settles in place when it is. */
+.wasp-turn.user.pending {
+  opacity: 0.6;
+}
 .wasp-bubble {
   background: var(--w-user-bg);
   color: var(--w-user-ink);
@@ -592,6 +596,20 @@
 .wasp-queue li.pending {
   opacity: 0.55;
 }
+.wasp-send-now {
+  flex-shrink: 0;
+  border: 1px solid var(--w-line);
+  border-radius: 999px;
+  background: var(--w-surface);
+  color: var(--w-ink);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  transition: border-color 0.15s;
+}
+.wasp-send-now:hover {
+  border-color: color-mix(in srgb, var(--w-accent) 60%, var(--w-line));
+}
 .wasp-queue-text {
   flex: 1;
   min-width: 0;
@@ -686,80 +704,6 @@
 }
 .wasp-spacer {
   flex: 1;
-}
-
-.wasp-deliver {
-  position: relative;
-}
-.wasp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--w-line);
-  background: var(--w-bg);
-  border-radius: 999px;
-  padding: 3px 8px 3px 11px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--w-ink);
-  transition: border-color 0.15s;
-}
-.wasp-chip svg {
-  width: 13px;
-  height: 13px;
-  color: var(--w-muted);
-}
-.wasp-chip:hover {
-  border-color: var(--w-muted);
-}
-.wasp-chip.asap {
-  border-color: color-mix(in srgb, var(--w-accent) 60%, var(--w-line));
-}
-.wasp-chip.now {
-  border-color: color-mix(in srgb, var(--w-error) 60%, var(--w-line));
-  color: var(--w-error);
-}
-.wasp-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  z-index: 10;
-  min-width: 240px;
-  padding: 5px;
-  border: 1px solid var(--w-line);
-  border-radius: 14px;
-  background: var(--w-surface);
-  box-shadow: var(--w-shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.wasp-menu button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  border: none;
-  background: none;
-  border-radius: 9px;
-  padding: 7px 10px;
-  text-align: left;
-}
-.wasp-menu button:hover,
-.wasp-menu button.on {
-  background: var(--w-soft);
-}
-.wasp-menu button.on strong::after {
-  content: ' ✓';
-  color: var(--w-accent);
-}
-.wasp-menu strong {
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.wasp-menu span {
-  font-size: 12px;
-  color: var(--w-muted);
 }
 
 .wasp-action {

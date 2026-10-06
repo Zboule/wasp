@@ -145,6 +145,7 @@ export function mockTransport({ seed = true } = {}): WaspTransport {
       queue = queue.filter((m) => m !== next);
       interrupt = false;
       deliverMsg(next);
+      emit({ type: 'RUN_STARTED', threadId: 'demo', runId: `run${seq}` });
       await turn(next);
       emit({ type: 'RUN_FINISHED', threadId: 'demo', runId: `run${seq}`, result: { outcome: interrupt ? 'interrupted' : 'done', costUsd: 0.02 } });
       interrupt = false;
@@ -213,7 +214,8 @@ export function mockTransport({ seed = true } = {}): WaspTransport {
       return ref;
     },
     async post(text: string, deliver: Deliver, files?: string[]) {
-      await sleep(60);
+      // About what the app's API takes in production, so the UI shows what happens meanwhile.
+      await sleep(500);
       const attachments = (files ?? []).map((ref) => uploaded.get(ref)).filter((f): f is WaspFile => Boolean(f));
       const m: QueuedMessage = {
         id: crypto.randomUUID(),
