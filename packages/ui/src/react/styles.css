@@ -3,6 +3,7 @@
  *
  * Theme it with the --wasp-* variables, on .wasp or any ancestor:
  *   --wasp-font, --wasp-font-mono, --wasp-font-size, --wasp-radius, --wasp-max-width
+ * `layout="narrow"` (data-layout on .wasp) is the dense variant for a side panel.
  *   --wasp-bg, --wasp-surface, --wasp-ink, --wasp-muted, --wasp-line, --wasp-soft
  *   --wasp-accent, --wasp-accent-ink, --wasp-user-bg, --wasp-user-ink, --wasp-error, --wasp-focus, --wasp-shadow
  * Or import a theme that maps them to your design system's tokens
@@ -773,6 +774,89 @@
   .wasp-queue {
     margin: 0 8px;
   }
+}
+
+/* --- narrow: a side panel the host draws, about 320–480px ---------------- */
+
+.wasp[data-layout='narrow'] {
+  --w-size: var(--wasp-font-size, 14px);
+  --w-radius: var(--wasp-radius, 14px);
+}
+.wasp[data-layout='narrow'] .wasp-scroll {
+  scrollbar-gutter: stable;
+}
+.wasp[data-layout='narrow'] .wasp-column {
+  max-width: none;
+  padding: 0 12px;
+}
+.wasp[data-layout='narrow'] .wasp-timeline {
+  gap: 14px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.wasp[data-layout='narrow'] .wasp-turn.user {
+  padding-left: 10%;
+}
+.wasp[data-layout='narrow'] .wasp-bubble {
+  padding: 7px 12px;
+}
+.wasp[data-layout='narrow'] .wasp-empty {
+  align-self: stretch;
+  margin: auto 0;
+  gap: 12px;
+  padding: 20px 0;
+}
+/* One per line: a panel is too narrow for a row of pills. */
+.wasp[data-layout='narrow'] .wasp-suggestions {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+.wasp[data-layout='narrow'] .wasp-suggestion {
+  border-radius: 12px;
+  padding: 8px 12px;
+  text-align: left;
+}
+.wasp[data-layout='narrow'] .wasp-md th,
+.wasp[data-layout='narrow'] .wasp-md td {
+  padding: 6px 9px;
+}
+.wasp[data-layout='narrow'] .wasp-code pre {
+  padding: 9px 11px;
+  font-size: 12px;
+}
+.wasp[data-layout='narrow'] .wasp-tool-body pre {
+  max-height: 220px;
+}
+.wasp[data-layout='narrow'] .wasp-file,
+.wasp[data-layout='narrow'] .wasp-file-chip {
+  max-width: 100%;
+}
+.wasp[data-layout='narrow'] .wasp-dock {
+  padding-bottom: 10px;
+}
+.wasp[data-layout='narrow'] .wasp-queue {
+  margin: 0 6px;
+}
+/* The panel already sets the chat apart from the page: no floating card. */
+.wasp[data-layout='narrow'] .wasp-composer {
+  box-shadow: none;
+}
+.wasp[data-layout='narrow'] .wasp-input {
+  min-height: 44px;
+  max-height: 160px;
+  padding: 11px 13px 2px;
+}
+.wasp[data-layout='narrow'] .wasp-composer-bar {
+  padding: 4px 6px 6px 8px;
+}
+.wasp[data-layout='narrow'] .wasp-action {
+  width: 30px;
+  height: 30px;
+}
+.wasp[data-layout='narrow'] .wasp-action svg {
+  width: 15px;
+  height: 15px;
 }
 
 @media (prefers-reduced-motion: reduce) {

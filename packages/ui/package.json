@@ -1,6 +1,6 @@
 {
   "name": "@zboule/wasp-ui",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "The chat UI for a wasp thread: a headless session, React building blocks with themes and plug points, and a one-file embed.",
   "keywords": [
     "wasp",

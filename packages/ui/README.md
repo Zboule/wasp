@@ -18,6 +18,25 @@ its next step without stopping (`asap`), and you can also edit or remove it. To 
 
 When the input is empty, its button stops the agent; Esc does the same. A queued message then starts the next turn.
 
+## In a side panel
+
+Pass `layout="narrow"` when the chat sits in a side panel or a drawer, about 320–480px wide. It's denser, runs edge to
+edge with no centred column, and stacks suggestions one per line. wasp doesn't draw the panel: your app does (its
+header, its close button, how it opens). The chat fills whatever box you give it.
+
+```tsx
+<aside style={{ width: 380, height: '100vh', display: 'flex', flexDirection: 'column' }}>
+  <header>Assistant</header>
+  <div style={{ flex: 1, minHeight: 0 }}>
+    <WaspChat transport={transport} layout="narrow" />
+  </div>
+</aside>
+```
+
+The chat takes its container's full height, so give that container one.
+
+The default, `layout="wide"`, is for a page of its own: the conversation in a centred column.
+
 ## Files
 
 When the transport can upload (`httpTransport` can), the input gets an attach button. Files also come in by
