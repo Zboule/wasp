@@ -49,3 +49,30 @@ body {
   border-left: 1px solid #ccc;
   border-right: 1px solid #ccc;
 }
+.pg-host {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.pg-host-page {
+  flex: 1;
+  padding: 32px 40px;
+  color: #4a4540;
+}
+.pg-panel {
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #d8d3cb;
+  background: #fff;
+}
+.pg-panel header {
+  padding: 12px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom: 1px solid #ebe6df;
+}
+.pg-panel .wasp {
+  flex: 1;
+  min-height: 0;
+}

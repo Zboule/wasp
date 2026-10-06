@@ -43,6 +43,12 @@ export type WaspOptions = {
   labels?: Partial<WaspLabels>;
   /** `auto` follows the system. Themes that map to the host's tokens follow the host instead. */
   colorScheme?: 'auto' | 'light' | 'dark';
+  /**
+   * `wide` (default): a page of its own, the conversation in a centred column.
+   * `narrow`: denser, edge to edge, for a side panel or drawer about 320–480px
+   * wide. The host draws the panel (its header, its close button); the chat fills it.
+   */
+  layout?: 'wide' | 'narrow';
   /** How a message is delivered while the agent works. `later` (default): after its turn; a queued one can still be sent now. */
   defaultDeliver?: Deliver;
   /** Prompts offered while the thread is empty. */
@@ -188,6 +194,7 @@ export function WaspRoot({ children, ...options }: WaspOptions & { children: Rea
       <div
         className={`wasp${options.className ? ` ${options.className}` : ''}`}
         data-scheme={options.colorScheme ?? 'auto'}
+        data-layout={options.layout ?? 'wide'}
         data-state={state.state}
         data-dragging={dragging || undefined}
         {...drop}
