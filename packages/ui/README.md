@@ -90,12 +90,24 @@ The class names (`.wasp-*`) are stable too, if you need to restyle a detail.
       render: (call) => <EventList json={call.result} />  // replaces the expanded body
     }
   }}
-  components={{ Markdown: MyMarkdown, Empty: MyEmptyState }}
+  components={{ Markdown: MyMarkdown, Empty: MyEmptyState, Link: MyLink }}
 />
 ```
 
-`components` can replace `Markdown`, `UserMessage`, `AssistantMessage`, `Tool` and `Empty`. Each wrapper
+`components` can replace `Markdown`, `UserMessage`, `AssistantMessage`, `Tool`, `Empty` and `Link`. Each wrapper
 receives the item and the default rendering as `children`, so it can decorate the default or replace it.
+
+`Link` draws each link in the agent's text. It gets the `href`, already checked to be https or mailto, and the link's
+text as `children`. A replaced `Markdown` draws its own links, so `Link` only applies to the default one. Use it to turn links to your own app into buttons that open a view in place, and fall back to a plain link
+for the rest:
+
+```tsx
+function MyLink({ href, children }: { href: string; children: ReactNode }) {
+  const id = href.match(/^https:\/\/app\.example\.com\/reels\/(\w+)$/)?.[1];
+  if (id) return <button onClick={() => openReel(id)}>{children}</button>;
+  return <a href={href} target="_blank" rel="noopener noreferrer nofollow">{children}</a>;
+}
+```
 
 ### Your own layout
 

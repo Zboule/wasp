@@ -26,7 +26,19 @@ export type SdkAgentConfig = {
   disallowedTools?: string[];
   /** The Claude credential, given to the CLI only (never put in this process's environment). */
   claude?: { CLAUDE_CODE_OAUTH_TOKEN: string } | { ANTHROPIC_API_KEY: string };
+  /** The plugin the image builds from the definition's `skills/` (see `pluginOptions`). */
+  pluginDir?: string;
 };
+
+/**
+ * The definition's skills, as a local plugin: filesystem settings stay off
+ * (`settingSources: []`), so this is how the app's skills reach the agent, next
+ * to Claude Code's bundled ones. They are listed to the model as `agent:<name>`,
+ * and every one is enabled. A `tools` allowlist must include `Skill`.
+ */
+export function pluginOptions(pluginDir: string | undefined): Pick<Options, 'plugins' | 'skills'> {
+  return pluginDir ? { plugins: [{ type: 'local', path: pluginDir }], skills: 'all' } : {};
+}
 
 /**
  * Variables that would make the CLI use another credential than the one we
@@ -90,6 +102,7 @@ export function sdkAgent(config: SdkAgentConfig): Agent {
         ...(config.mcpServers ? { mcpServers: config.mcpServers } : {}),
         ...(config.tools ? { tools: config.tools } : {}),
         ...(config.disallowedTools ? { disallowedTools: config.disallowedTools } : {}),
+        ...pluginOptions(config.pluginDir),
         ...(existing ? { resume: threadId } : { sessionId: threadId })
       };
       const q = query({ prompt: input, options });

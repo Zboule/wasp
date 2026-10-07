@@ -146,7 +146,7 @@ function Item({ item, streaming, pending }: { item: Exclude<TimelineItem, ToolIt
       const Md = components.Markdown;
       const body = (
         <div className="wasp-turn assistant">
-          {Md ? <Md text={item.text} streaming={streaming} /> : <Markdown text={item.text} copyLabel={labels.copy} copiedLabel={labels.copied} />}
+          {Md ? <Md text={item.text} streaming={streaming} /> : <Markdown text={item.text} copyLabel={labels.copy} copiedLabel={labels.copied} {...(components.Link ? { link: components.Link } : {})} />}
         </div>
       );
       const AssistantMessage = components.AssistantMessage;

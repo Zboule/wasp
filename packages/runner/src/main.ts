@@ -30,6 +30,8 @@ const bucket = env('WASP_BUCKET');
 const systemPromptFile = process.env.WASP_SYSTEM_PROMPT_FILE;
 const workDir = env('WASP_WORK_DIR', '/work');
 const systemPrompt = systemPromptFile ? readFileSync(systemPromptFile, 'utf8') : process.env.WASP_SYSTEM_PROMPT;
+/** Set by the image when the definition has a `skills/` folder. */
+const pluginDir = process.env.WASP_PLUGIN_DIR;
 const config = loadConfig(process.env, (file) => readFileSync(file, 'utf8'));
 
 // One microVM serves one thread, so one proxy and one current caller token.
@@ -84,7 +86,8 @@ const server = createRunnerServer({
         // The SDK sees only the local proxy URLs: no token in its configuration.
         ...(mcpServers ? { mcpServers } : {}),
         ...(config.tools ? { tools: config.tools } : {}),
-        ...(config.disallowedTools ? { disallowedTools: config.disallowedTools } : {})
+        ...(config.disallowedTools ? { disallowedTools: config.disallowedTools } : {}),
+        ...(pluginDir ? { pluginDir } : {})
       })
     };
   }
