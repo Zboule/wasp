@@ -135,7 +135,7 @@ description: Make Instagram content with the repo's video kit. Use whenever the 
 
 The image builds a local Claude Code plugin that holds only `skills/`: nothing else from the folder (commands,
 agents, hooks, an `.mcp.json`) is loaded. Filesystem settings stay off, so the agent has these skills and Claude
-Code's bundled ones. If `wasp.config.json` restricts `tools`, include `Skill`.
+Code's bundled ones. If you restrict `tools` (in `wasp.config.json` or `WaspAgent`'s args), include `Skill`.
 
 ### Your app's MCP, as the caller
 

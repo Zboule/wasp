@@ -145,6 +145,7 @@ export class WaspAgent extends $util.ComponentResource {
     const hasSkills = existsSync(path.join(buildDir, 'definition', 'skills'));
     if (hasSkills) {
       const plugin = path.join(buildDir, 'definition', '.wasp-plugin');
+      rmSync(plugin, { recursive: true, force: true });
       mkdirSync(path.join(plugin, '.claude-plugin'), { recursive: true });
       writeFileSync(path.join(plugin, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'agent' }));
       cpSync(path.join(buildDir, 'definition', 'skills'), path.join(plugin, 'skills'), { recursive: true });
