@@ -15,6 +15,6 @@ export { WaspChat, type WaspChatProps } from './react/WaspChat.tsx';
 export { type WaspComponents, type WaspOptions, type WaspToolRenderer, WaspRoot, useWasp, useWaspSession } from './react/context.tsx';
 export { WaspTimeline } from './react/Timeline.tsx';
 export { WaspComposer, WaspError, WaspQueue } from './react/Composer.tsx';
-export { CodeBlock, Markdown } from './react/Markdown.tsx';
+export { CodeBlock, type LinkComponent, Markdown } from './react/Markdown.tsx';
 export { type WaspLabels, labelsEn, labelsFr } from './react/labels.ts';
 export { type Attachments, DEFAULT_FILE_LIMITS, type FileLimits, type PendingFile, formatBytes } from './react/attachments.ts';

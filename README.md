@@ -118,6 +118,24 @@ Your agent is a folder: `agent/prompt.md` is appended to the Claude Code system 
 `WaspAgent`'s args (`model`, `maxTurns`, `maxBudgetUsd`, `tools`, `disallowedTools`, `mcpServers`) override
 the file, and take outputs (a URL per stage, say).
 
+### Skills
+
+Put skills in the folder too, one per subfolder: `agent/skills/<name>/SKILL.md`, with a `name` and a
+`description` in its front matter, and any files it refers to beside it. The agent sees each skill's
+description, and loads the whole skill when a task matches it, so a long how-to costs nothing in the
+turns that don't need it. They're listed to the model as `agent:<name>`.
+
+```markdown
+---
+name: social-content
+description: Make Instagram content with the repo's video kit. Use whenever the user asks for a reel, a carousel or a post.
+---
+1. Get the code…
+```
+
+The image ships them as a local Claude Code plugin. Filesystem settings stay off, so these are the only
+skills the agent has.
+
 ### Your app's MCP, as the caller
 
 An MCP server with `auth: "caller"` gets, on every request, the token of the message whose turn is running:

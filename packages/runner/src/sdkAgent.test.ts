@@ -1,7 +1,7 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
 
-import { type MappingState, toAgentEvents } from './sdkAgent.ts';
+import { type MappingState, pluginOptions, toAgentEvents } from './sdkAgent.ts';
 
 const sdk = (m: unknown) => m as SDKMessage;
 const fresh = (): MappingState => ({ interrupting: false, sessionCostUsd: 0 });
@@ -79,5 +79,15 @@ describe('cliEnv', () => {
       { CLAUDE_CODE_OAUTH_TOKEN: 'oat' }
     );
     expect(env).toEqual({ PATH: '/usr/bin', CLAUDE_CODE_OAUTH_TOKEN: 'oat', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' });
+  });
+});
+
+describe('pluginOptions', () => {
+  it("loads the definition's skills as a local plugin, every one enabled", () => {
+    expect(pluginOptions('/app/definition')).toEqual({ plugins: [{ type: 'local', path: '/app/definition' }], skills: 'all' });
+  });
+
+  it('adds nothing when the definition has no skills', () => {
+    expect(pluginOptions(undefined)).toEqual({});
   });
 });

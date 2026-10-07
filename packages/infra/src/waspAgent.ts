@@ -3,7 +3,7 @@ import type * as AwsNative from '@pulumi/aws-native';
 import type * as DockerBuild from '@pulumi/docker-build';
 import type * as Pulumi from '@pulumi/pulumi';
 import type * as Time from '@pulumiverse/time';
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -34,8 +34,9 @@ export type WaspAgentArgs = {
   claudeCredentialsParameter: string;
   /**
    * A folder baked into the image: `prompt.md` (appended to the Claude Code
-   * system prompt) and optionally `wasp.config.json` (model, turns, budget,
-   * tools, mcpServers). The args below override that file.
+   * system prompt), optionally `wasp.config.json` (model, turns, budget,
+   * tools, mcpServers) and `skills/<name>/SKILL.md` (skills the agent loads
+   * when a task matches their description). The args below override the file.
    */
   definition?: string;
   /** `browser` adds Chromium and playwright-core to the sandbox. */
@@ -138,6 +139,12 @@ export class WaspAgent extends $util.ComponentResource {
     if (args.definition) cpSync(path.resolve(args.definition), path.join(buildDir, 'definition'), { recursive: true });
     const hasPrompt = existsSync(path.join(buildDir, 'definition', 'prompt.md'));
     const hasConfig = existsSync(path.join(buildDir, 'definition', 'wasp.config.json'));
+    // Skills ship as a local plugin: the definition folder, with the manifest Claude Code needs.
+    const hasSkills = existsSync(path.join(buildDir, 'definition', 'skills'));
+    if (hasSkills) {
+      mkdirSync(path.join(buildDir, 'definition', '.claude-plugin'), { recursive: true });
+      writeFileSync(path.join(buildDir, 'definition', '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'agent' }));
+    }
 
     // ECR wants lowercase names, which Pulumi's auto-naming does not produce.
     const repositoryName = `${$app.name}-${$app.stage}-${name}`.toLowerCase().replace(/[^a-z0-9._/-]/g, '-');
@@ -275,7 +282,8 @@ export class WaspAgent extends $util.ComponentResource {
           ...(args.tools ? { WASP_TOOLS: JSON.stringify(args.tools) } : {}),
           ...(args.disallowedTools ? { WASP_DISALLOWED_TOOLS: JSON.stringify(args.disallowedTools) } : {}),
           ...(hasPrompt ? { WASP_SYSTEM_PROMPT_FILE: '/app/definition/prompt.md' } : {}),
-          ...(hasConfig ? { WASP_CONFIG_FILE: '/app/definition/wasp.config.json' } : {})
+          ...(hasConfig ? { WASP_CONFIG_FILE: '/app/definition/wasp.config.json' } : {}),
+          ...(hasSkills ? { WASP_PLUGIN_DIR: '/app/definition' } : {})
         }
       },
       { parent: this, dependsOn: [settled] }

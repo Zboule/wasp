@@ -35,6 +35,8 @@ export type WaspComponents = {
   }>;
   Tool: ComponentType<{ item: ToolItem; children: ReactNode }>;
   Empty: ComponentType<{ children: ReactNode }>;
+  /** One link in the agent's text (https only, already checked). Defaults to a link that opens a new tab. */
+  Link: ComponentType<{ href: string; children: ReactNode }>;
 };
 
 export type WaspOptions = {
