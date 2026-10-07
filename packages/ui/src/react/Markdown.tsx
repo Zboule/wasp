@@ -3,7 +3,7 @@ import { type ComponentType, Fragment, type ReactNode, useMemo, useState } from 
 import { type Block, type Inline, parseMarkdown } from '../core/markdown.ts';
 import { Check, Copy } from './icons.tsx';
 
-/** Draws one link of the agent's text. `href` is already checked: https only. */
+/** Draws one link of the agent's text. `href` is already checked: https or mailto only. */
 export type LinkComponent = ComponentType<{ href: string; children: ReactNode }>;
 
 /**

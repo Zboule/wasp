@@ -139,11 +139,15 @@ export class WaspAgent extends $util.ComponentResource {
     if (args.definition) cpSync(path.resolve(args.definition), path.join(buildDir, 'definition'), { recursive: true });
     const hasPrompt = existsSync(path.join(buildDir, 'definition', 'prompt.md'));
     const hasConfig = existsSync(path.join(buildDir, 'definition', 'wasp.config.json'));
-    // Skills ship as a local plugin: the definition folder, with the manifest Claude Code needs.
+    // Skills ship as a local plugin holding only them: a plugin folder would also load
+    // commands, agents, hooks and an .mcp.json (around the caller proxy), so the rest of
+    // the definition never goes in it.
     const hasSkills = existsSync(path.join(buildDir, 'definition', 'skills'));
     if (hasSkills) {
-      mkdirSync(path.join(buildDir, 'definition', '.claude-plugin'), { recursive: true });
-      writeFileSync(path.join(buildDir, 'definition', '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'agent' }));
+      const plugin = path.join(buildDir, 'definition', '.wasp-plugin');
+      mkdirSync(path.join(plugin, '.claude-plugin'), { recursive: true });
+      writeFileSync(path.join(plugin, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'agent' }));
+      cpSync(path.join(buildDir, 'definition', 'skills'), path.join(plugin, 'skills'), { recursive: true });
     }
 
     // ECR wants lowercase names, which Pulumi's auto-naming does not produce.
@@ -283,7 +287,7 @@ export class WaspAgent extends $util.ComponentResource {
           ...(args.disallowedTools ? { WASP_DISALLOWED_TOOLS: JSON.stringify(args.disallowedTools) } : {}),
           ...(hasPrompt ? { WASP_SYSTEM_PROMPT_FILE: '/app/definition/prompt.md' } : {}),
           ...(hasConfig ? { WASP_CONFIG_FILE: '/app/definition/wasp.config.json' } : {}),
-          ...(hasSkills ? { WASP_PLUGIN_DIR: '/app/definition' } : {})
+          ...(hasSkills ? { WASP_PLUGIN_DIR: '/app/definition/.wasp-plugin' } : {})
         }
       },
       { parent: this, dependsOn: [settled] }

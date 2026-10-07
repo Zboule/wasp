@@ -26,14 +26,15 @@ export type SdkAgentConfig = {
   disallowedTools?: string[];
   /** The Claude credential, given to the CLI only (never put in this process's environment). */
   claude?: { CLAUDE_CODE_OAUTH_TOKEN: string } | { ANTHROPIC_API_KEY: string };
-  /** The definition folder, when it ships skills: loaded as a local plugin (see `pluginOptions`). */
+  /** The plugin the image builds from the definition's `skills/` (see `pluginOptions`). */
   pluginDir?: string;
 };
 
 /**
  * The definition's skills, as a local plugin: filesystem settings stay off
- * (`settingSources: []`), so this is the only way skills reach the agent. They
- * are listed to the model as `agent:<name>`, and every one is enabled.
+ * (`settingSources: []`), so this is how the app's skills reach the agent, next
+ * to Claude Code's bundled ones. They are listed to the model as `agent:<name>`,
+ * and every one is enabled. A `tools` allowlist must include `Skill`.
  */
 export function pluginOptions(pluginDir: string | undefined): Pick<Options, 'plugins' | 'skills'> {
   return pluginDir ? { plugins: [{ type: 'local', path: pluginDir }], skills: 'all' } : {};

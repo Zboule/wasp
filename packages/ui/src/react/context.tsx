@@ -35,7 +35,7 @@ export type WaspComponents = {
   }>;
   Tool: ComponentType<{ item: ToolItem; children: ReactNode }>;
   Empty: ComponentType<{ children: ReactNode }>;
-  /** One link in the agent's text (https only, already checked). Defaults to a link that opens a new tab. */
+  /** One link in the agent's text (https or mailto, already checked). Defaults to a link that opens a new tab. Not used when `Markdown` is replaced. */
   Link: ComponentType<{ href: string; children: ReactNode }>;
 };
 
