@@ -15,6 +15,9 @@ const COMPACT_AFTER = 50;
  * Chunk names sort by time; `load` reads them in order and drops entries whose
  * `uuid` it has seen (the SDK may replay a batch).
  *
+ * A resume loads the same session twice (`getSessionInfo`, then the query), so
+ * the last load is kept until the next append to that key.
+ *
  *   sessions/<threadId>/<projectKey>/<sessionId>/m/<chunk>.jsonl            the main transcript
  *   sessions/<threadId>/<projectKey>/<sessionId>/s/<subpath>/<chunk>.jsonl  a subagent's
  */
@@ -55,38 +58,61 @@ export function createS3SessionStore({ client, bucket, threadId }: { client: S3C
       })
     );
 
+  async function loadFrom(prefix: string): Promise<SessionStoreEntry[] | null> {
+    const chunks = await list(prefix);
+    if (!chunks.length) return null;
+    const seen = new Set<string>();
+    const entries: SessionStoreEntry[] = [];
+    // In parallel: one by one, 50 chunks took ~1.3 s in a microVM, ~0.1 s at once. A long session can leave
+    // many more until its next load compacts them; the S3 client's connection pool queues what it cannot run at once.
+    for (const chunkEntries of await Promise.all(chunks.map(read))) {
+      for (const entry of chunkEntries) {
+        if (entry.uuid) {
+          if (seen.has(entry.uuid)) continue;
+          seen.add(entry.uuid);
+        }
+        entries.push(entry);
+      }
+    }
+    if (chunks.length > COMPACT_AFTER) {
+      // Written next to the newest chunk so it sorts after everything it replaces
+      // and before anything appended later. A crash before the delete leaves
+      // duplicates that the uuid check above drops.
+      await put(`${chunks.at(-1)}~merged.jsonl`, entries);
+      for (let i = 0; i < chunks.length; i += 1000) {
+        await client.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: chunks.slice(i, i + 1000).map((Key) => ({ Key })) } }));
+      }
+    }
+    return entries;
+  }
+
+  /** The last load of each prefix, and a count of appends started or finished on it: a load that overlapped one is not kept. */
+  const lastLoad = new Map<string, SessionStoreEntry[] | null>();
+  const appends = new Map<string, number>();
+  const touched = (prefix: string) => {
+    appends.set(prefix, (appends.get(prefix) ?? 0) + 1);
+    lastLoad.delete(prefix);
+  };
+
   return {
     async append(key, entries) {
-      if (entries.length) await put(base(key) + chunkName(), entries);
+      const prefix = base(key);
+      touched(prefix);
+      try {
+        if (entries.length) await put(prefix + chunkName(), entries);
+      } finally {
+        touched(prefix);
+      }
     },
 
     async load(key) {
       const prefix = base(key);
-      const chunks = await list(prefix);
-      if (!chunks.length) return null;
-      const seen = new Set<string>();
-      const entries: SessionStoreEntry[] = [];
-      for (const chunk of chunks) {
-        for (const entry of await read(chunk)) {
-          if (entry.uuid) {
-            if (seen.has(entry.uuid)) continue;
-            seen.add(entry.uuid);
-          }
-          entries.push(entry);
-        }
-      }
-      if (chunks.length > COMPACT_AFTER) {
-        // Written next to the newest chunk so it sorts after everything it replaces
-        // and before anything appended later. A crash before the delete leaves
-        // duplicates that the uuid check above drops.
-        await put(`${chunks.at(-1)}~merged.jsonl`, entries);
-        for (let i = 0; i < chunks.length; i += 1000) {
-          await client.send(
-            new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: chunks.slice(i, i + 1000).map((Key) => ({ Key })) } })
-          );
-        }
-      }
-      return entries;
+      const kept = lastLoad.get(prefix);
+      if (kept !== undefined) return kept && [...kept];
+      const before = appends.get(prefix) ?? 0;
+      const loaded = await loadFrom(prefix);
+      if ((appends.get(prefix) ?? 0) === before) lastLoad.set(prefix, loaded);
+      return loaded && [...loaded];
     }
   };
 }

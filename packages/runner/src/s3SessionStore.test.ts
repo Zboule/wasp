@@ -1,4 +1,4 @@
-import { CreateBucketCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
+import { CreateBucketCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -57,5 +57,105 @@ const entry = (uuid: string, text = uuid): SessionStoreEntry => ({ type: 'user',
     const list = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: `sessions/${threadId}/` }));
     expect(list.KeyCount).toBe(2);
     expect((await store.load(key))?.map((e) => e.uuid)).toEqual([...expected, 'after']);
+  });
+});
+
+/** An in-memory S3 that counts calls: enough of the API for the store. */
+function fakeS3() {
+  const objects = new Map<string, string>();
+  const calls = { list: 0, get: 0, put: 0 };
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const client = {
+    async send(command: { input: Record<string, unknown> }) {
+      const input = command.input;
+      if (command instanceof ListObjectsV2Command) {
+        calls.list++;
+        const keys = [...objects.keys()].filter((k) => k.startsWith(String(input.Prefix))).sort();
+        return { Contents: keys.map((Key) => ({ Key })), IsTruncated: false };
+      }
+      if (command instanceof GetObjectCommand) {
+        calls.get++;
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        inFlight--;
+        const body = objects.get(String(input.Key)) ?? '';
+        return { Body: { transformToString: async () => body } };
+      }
+      if (command instanceof PutObjectCommand) {
+        calls.put++;
+        objects.set(String(input.Key), String(input.Body));
+        return {};
+      }
+      if (command instanceof DeleteObjectsCommand) {
+        for (const { Key } of (input.Delete as { Objects: { Key: string }[] }).Objects) objects.delete(Key);
+        return {};
+      }
+      throw new Error(`unexpected command ${command.constructor.name}`);
+    }
+  };
+  return { client: client as unknown as S3Client, objects, calls, maxInFlight: () => maxInFlight };
+}
+
+describe('S3 session store (in memory)', () => {
+  const key = { projectKey: '/work/thread', sessionId: 'session-1' };
+
+  it('reads chunks in parallel and still returns them in order', async () => {
+    const s3 = fakeS3();
+    const store = createS3SessionStore({ client: s3.client, bucket: 'b', threadId: 't' });
+    for (let i = 0; i < 40; i++) await store.append(key, [entry(`e${String(i).padStart(2, '0')}`)]);
+
+    const fresh = createS3SessionStore({ client: s3.client, bucket: 'b', threadId: 't' });
+    expect((await fresh.load(key))?.map((e) => e.uuid)).toEqual(Array.from({ length: 40 }, (_, i) => `e${String(i).padStart(2, '0')}`));
+    expect(s3.maxInFlight()).toBeGreaterThan(1);
+  });
+
+  it('answers a second load of the same session from memory, until the next append', async () => {
+    const s3 = fakeS3();
+    const store = createS3SessionStore({ client: s3.client, bucket: 'b', threadId: 't' });
+    await store.append(key, [entry('a')]);
+    await store.load(key);
+    const reads = s3.calls.get;
+    expect((await store.load(key))?.map((e) => e.uuid)).toEqual(['a']);
+    expect(s3.calls.get).toBe(reads);
+
+    await store.append(key, [entry('b')]);
+    expect((await store.load(key))?.map((e) => e.uuid)).toEqual(['a', 'b']);
+  });
+
+  it('does not keep a load that raced an append', async () => {
+    const s3 = fakeS3();
+    const store = createS3SessionStore({ client: s3.client, bucket: 'b', threadId: 't' });
+    await store.append(key, [entry('a')]);
+    const loading = store.load(key);
+    await store.append(key, [entry('b')]);
+    await loading;
+    expect((await store.load(key))?.map((e) => e.uuid)).toEqual(['a', 'b']);
+  });
+
+  it('does not keep a load that listed while an append was still being written', async () => {
+    const s3 = fakeS3();
+    const store = createS3SessionStore({ client: s3.client, bucket: 'b', threadId: 't' });
+    await store.append(key, [entry('a')]);
+    let release!: () => void;
+    const slowPut = s3.client.send.bind(s3.client);
+    s3.client.send = (async (command: PutObjectCommand) => {
+      if (command instanceof PutObjectCommand) await new Promise<void>((resolve) => (release = resolve));
+      return slowPut(command);
+    }) as typeof s3.client.send;
+    const appending = store.append(key, [entry('b')]);
+    await store.load(key); // lists before the put lands: sees only 'a'
+    release();
+    await appending;
+    expect((await store.load(key))?.map((e) => e.uuid)).toEqual(['a', 'b']);
+  });
+
+  it('hands out copies, so a caller cannot change what the next load returns', async () => {
+    const s3 = fakeS3();
+    const store = createS3SessionStore({ client: s3.client, bucket: 'b', threadId: 't' });
+    await store.append(key, [entry('a')]);
+    (await store.load(key))!.push(entry('injected'));
+    expect((await store.load(key))?.map((e) => e.uuid)).toEqual(['a']);
   });
 });

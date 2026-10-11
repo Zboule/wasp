@@ -84,6 +84,8 @@ export function createMcpProxy(servers: Record<string, McpServerSpec>) {
         Object.keys(servers).map((name) => [name, { type: 'http' as const, url: `http://127.0.0.1:${port}/mcp/${encodeURIComponent(name)}` }])
       );
     },
+    /** The servers called as the caller: the ones to reconnect when the caller changes. */
+    callerServers: Object.keys(servers).filter((name) => servers[name]!.auth === 'caller'),
     /** The credential for what follows: the delivered message's token, or none. */
     setToken(next: string | undefined) {
       token = next;

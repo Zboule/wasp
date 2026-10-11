@@ -21,7 +21,7 @@ RUN useradd --create-home --uid 10001 wasp && mkdir -p /work && chown wasp:wasp 
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
-COPY runner.mjs ./
+COPY runner.mjs launcher.mjs ./
 COPY definition/ /app/definition/
 
 USER wasp
@@ -32,4 +32,5 @@ ENV HOME=/home/wasp \
     CHROME_PATH=/usr/bin/chromium \
     NODE_PATH=/usr/local/lib/node_modules
 EXPOSE 8080
-CMD ["node", "runner.mjs"]
+# The launcher starts the runner on the first invocation: after a V2 snapshot restore (src/launcher.ts).
+CMD ["node", "launcher.mjs"]

@@ -37,7 +37,7 @@ export type PostOptions = {
   text: string;
   /** `later` (default) waits for the current turn, `asap` joins it at the next tool boundary, `now` interrupts it. */
   deliver?: Deliver;
-  /** The user's token for MCP servers declared `auth: "caller"`. Encrypted before it is stored. */
+  /** The user's token for MCP servers declared `auth: "caller"`. Encrypted before it is stored. Requires `principal`. */
   callerToken?: string;
   /**
    * Who `callerToken` speaks for: an opaque, stable id of your choosing (a user
@@ -158,6 +158,8 @@ export function createWaspClientWith(deps: WaspClientDeps): WaspClient {
       if (!text.trim() && files.length === 0) throw new Error('wasp: a message needs text or files');
       if (text.length > MAX_TEXT) throw new Error(`wasp: a message is limited to ${MAX_TEXT} characters`);
       if (principal !== undefined && (!principal || principal.length > 200)) throw new Error('wasp: a principal is 1 to 200 characters');
+      // A turn keeps its principal: without one, nothing tells two callers apart.
+      if (callerToken && principal === undefined) throw new Error('wasp: a callerToken needs its principal');
       const attachments = files.length ? await attach(threadId, files) : [];
       const messageId = crypto.randomUUID();
       await store.enqueue(threadId, {

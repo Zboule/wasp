@@ -42,9 +42,33 @@ ever holds credentials scoped to its own thread.
 | Credential lifetime | ≤ 1 hour (role chaining). The runner asks for a refresh from 10 minutes before expiry, again every minute until it arrives; the waker answers with a second invoke to the same session. | STS |
 | Caller tokens | encrypted by the client with context `{ threadId }`, decryptable only through the thread role; decrypted just before a message is claimed, kept in memory as the running turn's MCP credential (a localhost proxy adds it to the app's MCP calls), cleared by a message without one. A token that can't be decrypted, or a JWT past its `exp`, fails the message (`wasp.message_failed`) instead of reaching the agent. | KMS, the runner |
 | App data | only through the app's MCP server with the caller's token | the app |
+| MCP sessions | the CLI connects to the caller MCP servers when a session opens, after the first message's token is set; when a turn acts for another principal (or none) they reconnect first, and a server that fails to reconnect within 15 s is turned off, so a turn never uses an MCP session opened for someone else | the runner |
 | Definition skills | `skills/` is copied into a plugin of its own (`definition/.wasp-plugin`), so nothing else in the definition loads as a plugin: no hooks, commands, agents or `.mcp.json`, which would reach MCP servers around the caller proxy. Skills are text the agent reads; it already has a shell in the microVM. | the image build |
 | User files | uploaded by the browser with a presigned POST for one key, `payloads/<threadId>/files/<fileId>/<name>`, signed by the app's role (`s3:PutObject` on `payloads/*/files/*` only). Inside the thread's own prefix, so the session policy is unchanged. Downloads are presigned with `Content-Disposition: attachment`, so an uploaded page never runs on the bucket's origin. | IAM, S3 POST policy |
 | Tool payloads (`outputRef`, `argsRef`) | written by the agent under `payloads/<threadId>/`, with any content type it chooses. Presigned with `Content-Type: text/plain; charset=utf-8`, so they open as text in a tab and an agent-written page never runs on the bucket's origin. | the client's presign |
+
+## Snapshots (platform V2)
+
+On V2, AgentCore starts the image once per runtime version, waits for a healthy
+`/ping`, snapshots the microVM, and restores that snapshot for every new
+session. Anything a process held at that moment is in every thread's microVM,
+including the state of its random-number generators: AWS documents that
+OpenSSL is not reseeded after a restore, and two sessions restored from one
+snapshot drew the same `crypto.randomUUID()` and `randomBytes()` in our tests
+(only `/dev/urandom` differed).
+
+So nothing that must be unique or secret runs before the snapshot:
+
+| Process | Before the snapshot | After the restore |
+|---|---|---|
+| launcher (PID 1, `launcher.ts`) | runs the warm-up, then answers `GET /ping` (anything but `POST /invocations` is a 404 until then) | forwards every request to the runner. Keeps nothing, opens no outbound connection, draws no random number |
+| warm-up (a runner process with `WASP_WARM_UP=1`) | loads the runner and starts the Claude CLI to its handshake, with no credential, no MCP server, no thread and a throwaway config folder. Runs as its own process group, killed as a whole when it is done or after 90 s | gone |
+| runner | not started | started by the first `POST /invocations`, so its random state, TLS keys and ids are its own |
+
+The warm-up only puts files into memory (the CLI is a 240 MB binary that a
+restored microVM otherwise pages in from remote storage on the first turn). It
+never sees a thread's credentials or caller tokens, which only ever reach the
+runner (invariant 7 in `CLAUDE.md`).
 
 Refs the client signs: the agent can write its own feed and queue, so any
 S3 key stored there (a file's `ref`, a tool result's `outputRef` or `argsRef`)

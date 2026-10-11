@@ -27,14 +27,13 @@ describe('wasp client', () => {
     const { store, client } = setup();
     const thread = crypto.randomUUID();
     expect((await client.post(thread, { text: 'first' })).position).toBe(0);
-    expect((await client.post(thread, { text: 'urgent', deliver: 'now', callerToken: 'secret' })).position).toBe(0);
+    expect((await client.post(thread, { text: 'urgent', deliver: 'now', callerToken: 'secret', principal: 'user:1' })).position).toBe(0);
 
     const pending = await store.pending(thread);
     expect(pending.map((m) => m.text)).toEqual(['urgent', 'first']);
     expect(pending[0]?.callerToken).toBe(`enc(${thread}:secret)`);
-    expect(pending[0]?.principal).toBeUndefined();
-    await client.post(thread, { text: 'as someone', callerToken: 't', principal: 'user:42' });
-    expect((await store.pending(thread)).find((m) => m.text === 'as someone')?.principal).toBe('user:42');
+    expect(pending[0]?.principal).toBe('user:1');
+    await expect(client.post(thread, { text: 'whose?', callerToken: 't' })).rejects.toThrow(/principal/);
     await expect(client.post(thread, { text: 'x', principal: 'p'.repeat(201) })).rejects.toThrow(/principal/);
   });
 
@@ -50,7 +49,7 @@ describe('wasp client', () => {
     const thread = crypto.randomUUID();
     expect((await client.feed(thread)).state).toBe('idle');
 
-    await client.post(thread, { text: 'hi', callerToken: 'secret' });
+    await client.post(thread, { text: 'hi', callerToken: 'secret', principal: 'user:1' });
     const waiting = await client.feed(thread);
     expect(waiting.state).toBe('waking_up');
     expect(JSON.stringify(waiting.queue)).not.toContain('secret');

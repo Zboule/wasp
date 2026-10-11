@@ -68,8 +68,8 @@ importers:
         specifier: 6.66.2
         version: 6.66.2(typescript@5.9.3)
       '@pulumi/aws-native':
-        specifier: 1.72.0
-        version: 1.72.0(typescript@5.9.3)
+        specifier: 1.82.0
+        version: 1.82.0(typescript@5.9.3)
       '@pulumi/docker-build':
         specifier: 0.0.14
         version: 0.0.14(typescript@5.9.3)
@@ -1036,8 +1036,8 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
-  '@pulumi/aws-native@1.72.0':
-    resolution: {integrity: sha512-QsMsLDcg8uwEr8ekSzBHhDscMvYQgsSiycIaHa9LF4jIUyDmbnm5Cm6ZrE6s1NQSxibiQXiUvkwOgg1kwruNcg==}
+  '@pulumi/aws-native@1.82.0':
+    resolution: {integrity: sha512-+OPpLfLrkEmYCGNI1UPXEsgpMPJ/OOe2uAOcO6mI66nOenZSyUaGJRpILucwLp1h0F8wdMH12xaIoffJJ2HDkA==}
 
   '@pulumi/aws@6.66.2':
     resolution: {integrity: sha512-jO5L4JcjYriqXBGYH9LVb+GjawHUJvkWvLtb5nXxIKpkykEO1LyWVZdR4ngFcT7Hlw99Tg1ms4ut7LdETPCuUw==}
@@ -3661,7 +3661,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
-  '@pulumi/aws-native@1.72.0(typescript@5.9.3)':
+  '@pulumi/aws-native@1.82.0(typescript@5.9.3)':
     dependencies:
       '@pulumi/pulumi': 3.210.0(typescript@5.9.3)
     transitivePeerDependencies:

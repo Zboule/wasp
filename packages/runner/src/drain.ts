@@ -27,9 +27,11 @@ export type DrainDeps = {
    * Called with each message just before it is delivered, while it still holds
    * its caller token (the claim deletes it): makes that token the credential of
    * the MCP calls that follow, or clears it when the message has none. A token
-   * that cannot be used fails the message instead of delivering it.
+   * that cannot be used fails the message instead of delivering it. `joining`:
+   * the message joins the running turn (`asap`), whose credential must survive
+   * a token that cannot be used.
    */
-  useCaller?: (message: StoredMessage) => Promise<CallerResult>;
+  useCaller?: (message: StoredMessage, joining: boolean) => Promise<CallerResult>;
 };
 
 export type CallerResult = { ok: true } | { ok: false; reason: 'token_expired' | 'invalid' };
@@ -78,7 +80,12 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   if (!first) return;
   // An interrupt asked for while nothing ran must not kill this session's first turn.
   await store.takeInterrupt(threadId);
+  const useCaller = async (message: StoredMessage, joining: boolean): Promise<CallerResult> => (await deps.useCaller?.(message, joining)) ?? { ok: true };
+  // The agent connects to its MCP servers as it opens: the first message's caller must already be in place.
+  const firstCaller = await useCaller(first, false);
   const [session] = await Promise.all([agent.open(threadId), deps.files?.restoreAll()]);
+  /** Whose token the caller MCP servers connected with (undefined: none). */
+  let mcpPrincipal = firstCaller.ok ? callerOf(first) : undefined;
 
   let running = false;
   let interrupting = false;
@@ -97,7 +104,13 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   const deliver = async (message: StoredMessage, priority?: 'next'): Promise<boolean> => {
     // Before the claim: once claimed, the message is the agent's, and its files must already be there.
     if (message.attachments?.length) await deps.files?.fetch(message.attachments);
-    const caller = (await deps.useCaller?.(message)) ?? { ok: true };
+    // The first message's caller was put in place before the agent opened, and nothing ran since.
+    const caller = message === first ? firstCaller : await useCaller(message, priority === 'next');
+    // Before the claim: if the caller MCP servers cannot follow, the message stays queued.
+    if (caller.ok && !priority && callerOf(message) !== mcpPrincipal) {
+      await session.reconnectCallerMcp();
+      mcpPrincipal = callerOf(message);
+    }
     if (!(await store.claim(threadId, message.id, now()))) return false;
     if (!caller.ok) {
       // Claimed so it leaves the queue (and its token is deleted), but never shown to the agent.
@@ -194,4 +207,9 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
     clearInterval(timer);
     await chain;
   }
+}
+
+/** The principal whose token a message carries; undefined when it carries none. */
+function callerOf(message: StoredMessage): string | undefined {
+  return message.callerToken ? (message.principal ?? '') : undefined;
 }
