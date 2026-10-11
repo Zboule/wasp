@@ -40,13 +40,22 @@ that only works if the agent behaves is not secure.
    the next turn), and a message without a token clears it.
 6. **The app's own data is never reachable from the microVM** except through the
    app's MCP server, as the calling user.
-7. **Accepted risks** (by design, not bugs, see `docs/security-model.md`): a
+7. **Nothing runs into the V2 snapshot that must be unique or secret.** On
+   AgentCore platform V2, every session is restored from one snapshot taken
+   after startup: whatever a process held then is cloned into every microVM,
+   random-number state included (measured: two sessions drew the same
+   `crypto.randomUUID()`). So the image's first process (`launcher.ts`) only
+   warms up, with no credential, and forwards requests; the runner, which holds
+   credentials and talks TLS, starts after the restore, on the first invocation.
+   Never start the runner, a CLI process, or anything holding a credential,
+   a connection or randomness before the first invocation.
+8. **Accepted risks** (by design, not bugs, see `docs/security-model.md`): a
    compromised agent can alter anything in its **own** thread (queue, feed,
    transcript), leak its own thread's data, read the caller token of the turn it
    is running (its user's, or the service account the app minted it for), and
    read the Claude credential. Prefer an API key with a spend limit, or Bedrock
    mode, over a long-lived subscription token.
-8. **The boundary tests must stay green.** Today that is one unit test: the
+9. **The boundary tests must stay green.** Today that is one unit test: the
    exact session policy (`packages/infra/src/waker/waker.test.ts`). The E2E
    escape test (the agent tries to read or write another thread, decrypt another
    thread's token, and use the runtime's own role, and every attempt must be

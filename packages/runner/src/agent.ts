@@ -30,6 +30,13 @@ export interface AgentSession {
   interrupt(): Promise<void>;
   /** No more input: the event stream ends once the current turn does. */
   end(): void;
+  /**
+   * Connects again to the MCP servers called as the caller, so their handshake
+   * and tool list are those of the caller now in place. The servers connect
+   * when the session opens; the drain loop calls this when a turn acts for
+   * someone else than the one they connected for.
+   */
+  reconnectCallerMcp?(): Promise<void>;
   readonly events: AsyncIterable<AgentEvent>;
 }
 

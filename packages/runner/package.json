@@ -13,7 +13,7 @@
   "scripts": {
     "typecheck": "tsc -p .",
     "test": "vitest run",
-    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=image/runner.mjs --external:@anthropic-ai/claude-agent-sdk --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=image/runner.mjs --external:@anthropic-ai/claude-agent-sdk --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" && esbuild src/launcherMain.ts --bundle --platform=node --format=esm --target=node24 --outfile=image/launcher.mjs",
     "image": "pnpm build && docker build --platform linux/arm64 -t wasp-runner:local image"
   },
   "dependencies": {

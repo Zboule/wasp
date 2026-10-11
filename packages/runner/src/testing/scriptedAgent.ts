@@ -19,17 +19,21 @@ export type Script = (text: string) => Step[];
  * - a plain message waits and starts the next turn
  * - interrupt() kills the running tool and ends the turn as `interrupted`
  */
-export function scriptedAgent(script: Script = (text) => [{ say: `echo:${text}` }]) {
+export function scriptedAgent(script: Script = (text) => [{ say: `echo:${text}` }], hooks: SessionHooks = {}) {
   const sent: AgentInput[] = [];
   const agent: Agent = {
     async open() {
-      return openSession(script, sent);
+      hooks.onOpen?.();
+      return openSession(script, sent, hooks);
     }
   };
   return { agent, sent };
 }
 
-function openSession(script: Script, sent: AgentInput[]): AgentSession {
+/** What a test can watch besides messages: when a session opens, and when it reconnects its caller MCP servers. */
+export type SessionHooks = { onOpen?: () => void; onReconnectCallerMcp?: () => void };
+
+function openSession(script: Script, sent: AgentInput[], hooks: SessionHooks): AgentSession {
   const inputs: AgentInput[] = [];
   let ended = false;
   let wake: (() => void) | null = null;
@@ -90,6 +94,9 @@ function openSession(script: Script, sent: AgentInput[]): AgentSession {
     },
     async interrupt() {
       interruptTurn?.();
+    },
+    async reconnectCallerMcp() {
+      hooks.onReconnectCallerMcp?.();
     },
     end() {
       ended = true;

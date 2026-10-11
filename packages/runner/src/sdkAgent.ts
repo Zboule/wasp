@@ -4,10 +4,14 @@ import {
   type SDKMessage,
   type SDKUserMessage,
   type SessionStore,
+  type SpawnedProcess,
   getSessionInfo,
-  query
+  query,
+  startup
 } from '@anthropic-ai/claude-agent-sdk';
-import { mkdirSync } from 'node:fs';
+import { type ChildProcess, spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import type { Agent, AgentEvent, AgentSession } from './agent.ts';
@@ -21,6 +25,8 @@ export type SdkAgentConfig = {
   maxTurns?: number;
   maxBudgetUsd?: number;
   mcpServers?: Record<string, McpServerConfig>;
+  /** The ones called as the caller: reconnected when a turn acts for someone else (see AgentSession). */
+  callerMcpServers?: string[];
   /** Restricts the available tools (the SDK's `tools`); `allowedTools` would only auto-approve. */
   tools?: string[];
   disallowedTools?: string[];
@@ -75,6 +81,68 @@ export function threadWorkDir(workDir: string, threadId: string): string {
   return path.join(workDir, threadId);
 }
 
+/** What every session of this agent shares: everything but the thread, the credential and the MCP servers. */
+export function hostOptions(config: SdkAgentConfig): Options {
+  return {
+    model: config.model,
+    systemPrompt: { type: 'preset', preset: 'claude_code', ...(config.systemPrompt ? { append: config.systemPrompt } : {}) },
+    // The microVM is the sandbox.
+    permissionMode: 'bypassPermissions',
+    allowDangerouslySkipPermissions: true,
+    settingSources: [],
+    ...(config.maxTurns ? { maxTurns: config.maxTurns } : {}),
+    ...(config.maxBudgetUsd ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
+    ...(config.tools ? { tools: config.tools } : {}),
+    ...(config.disallowedTools ? { disallowedTools: config.disallowedTools } : {}),
+    ...pluginOptions(config.pluginDir)
+  };
+}
+
+/**
+ * Starts the CLI as a session would, up to its initialize handshake, then
+ * stops it: run before AgentCore snapshots the microVM (platform V2), it puts
+ * the 240 MB binary and what it loads into the snapshot. Without it, a restored
+ * microVM pages them in from remote storage on the first turn (17-23 s measured).
+ *
+ * No credential, no MCP server, no thread, and a throwaway config folder: what
+ * this process creates would otherwise be shared by every session restored
+ * from the snapshot (Claude Code's own ids live in its config folder).
+ */
+export async function warmUpCli(config: SdkAgentConfig): Promise<void> {
+  const configDir = mkdtempSync(path.join(tmpdir(), 'wasp-warm-up-'));
+  let cli: ChildProcess | undefined;
+  try {
+    const warm = await startup({
+      options: {
+        ...hostOptions(config),
+        cwd: configDir,
+        env: { ...cliEnv(process.env, undefined), CLAUDE_CONFIG_DIR: configDir, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+        // Spawned here so we can wait for its exit: no process of it may run into the snapshot.
+        spawnClaudeCodeProcess: ({ command, args, cwd, env, signal }) => {
+          cli = spawn(command, args, { cwd, env, signal, stdio: ['pipe', 'pipe', 'ignore'] });
+          return cli as unknown as SpawnedProcess;
+        }
+      }
+    });
+    await warm[Symbol.asyncDispose]();
+    await exited(cli, 10_000);
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+}
+
+/** Resolves once the process has exited, killing it if it has not within `ms`. */
+async function exited(child: ChildProcess | undefined, ms: number): Promise<void> {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => child.kill('SIGKILL'), ms);
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 /**
  * Turns run on the Claude Agent SDK, one streaming-input query per session.
  * The thread id is the SDK session id, so any microVM resumes the same
@@ -83,36 +151,35 @@ export function threadWorkDir(workDir: string, threadId: string): string {
 export function sdkAgent(config: SdkAgentConfig): Agent {
   return {
     async open(threadId) {
+      const opened = Date.now();
       const cwd = threadWorkDir(config.workDir, threadId);
       mkdirSync(cwd, { recursive: true });
       const existing = await getSessionInfo(threadId, { dir: cwd, sessionStore: config.sessionStore });
+      const infoMs = Date.now() - opened;
       const input = channel<SDKUserMessage>();
       const options: Options = {
-        model: config.model,
+        ...hostOptions(config),
         cwd,
-        systemPrompt: { type: 'preset', preset: 'claude_code', ...(config.systemPrompt ? { append: config.systemPrompt } : {}) },
-        // The microVM is the sandbox.
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
-        settingSources: [],
         env: config.claude ? cliEnv(process.env, config.claude) : { ...process.env, CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' },
         ...(config.sessionStore ? { sessionStore: config.sessionStore } : {}),
-        ...(config.maxTurns ? { maxTurns: config.maxTurns } : {}),
-        ...(config.maxBudgetUsd ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
         ...(config.mcpServers ? { mcpServers: config.mcpServers } : {}),
-        ...(config.tools ? { tools: config.tools } : {}),
-        ...(config.disallowedTools ? { disallowedTools: config.disallowedTools } : {}),
-        ...pluginOptions(config.pluginDir),
         ...(existing ? { resume: threadId } : { sessionId: threadId })
       };
       const q = query({ prompt: input, options });
       const state: MappingState = { interrupting: false, sessionCostUsd: 0 };
 
       const debug = process.env.WASP_DEBUG ? (m: SDKMessage) => console.error('[sdk]', describe(m)) : undefined;
+      let announced = false;
       async function* events(): AsyncGenerator<AgentEvent> {
         try {
           for await (const message of q) {
             debug?.(message);
+            if (!announced && message.type === 'system' && message.subtype === 'init') {
+              // One line per session: where a slow first turn went, and whether each MCP server connected.
+              announced = true;
+              const mcp = message.mcp_servers.map((m) => `${m.name}=${m.status}`).join(' ') || 'none';
+              console.log(`wasp: thread ${threadId} ${existing ? 'resumed' : 'started'}: transcript ${infoMs} ms, CLI ready ${Date.now() - opened} ms; MCP ${mcp}`);
+            }
             yield* toAgentEvents(message, state);
             if (message.type === 'result') state.interrupting = false;
           }
@@ -139,6 +206,16 @@ export function sdkAgent(config: SdkAgentConfig): Agent {
         },
         end() {
           input.close();
+        },
+        async reconnectCallerMcp() {
+          for (const name of config.callerMcpServers ?? []) {
+            try {
+              await q.reconnectMcpServer(name);
+            } catch (error) {
+              // A server that refuses this caller (or no caller) is simply not available to the turn.
+              console.error(`wasp: MCP server ${name} did not reconnect: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
         },
         events: events()
       };

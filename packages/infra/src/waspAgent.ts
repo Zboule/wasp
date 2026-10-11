@@ -12,8 +12,9 @@ import { runtimeName } from './names.ts';
 /*
  * SST injects these into every file it bundles for `sst.config.ts`, packages
  * under node_modules included. Declared here, module-scoped, so the types do not
- * leak into the app's own globals. The app must list the `aws-native`,
- * `docker-build` (>= 0.0.14) and `time` providers in its sst.config.
+ * leak into the app's own globals. The app must list the `aws-native`
+ * (>= 1.82.0, for `platformVersion`), `docker-build` (>= 0.0.14) and `time`
+ * providers in its sst.config.
  */
 declare const aws: typeof Aws;
 declare const awsnative: typeof AwsNative;
@@ -53,6 +54,14 @@ export type WaspAgentArgs = {
   /** Restricts the tools the agent has (built-in and MCP, e.g. `mcp__app__get_profile`). */
   tools?: string[];
   disallowedTools?: string[];
+  /**
+   * AgentCore's platform version. `V2` (default) restores every new session from
+   * a snapshot taken after the runner warmed up: a few seconds to the first turn
+   * instead of 15-20 s on `V1`, which pulls the image on each cold start. V2
+   * caps the runtime's environment variables at 2.5 KB in all (AWS refuses the
+   * deploy beyond): keep long MCP server lists in `wasp.config.json`.
+   */
+  platform?: 'V1' | 'V2';
   /** Let `sst remove` delete the bucket with its transcripts. Off by default. */
   removable?: boolean;
   /**
@@ -275,6 +284,7 @@ export class WaspAgent extends $util.ComponentResource {
         roleArn: runtimeRole.arn,
         networkConfiguration: { networkMode: 'PUBLIC' },
         protocolConfiguration: 'HTTP',
+        platformVersion: args.platform ?? 'V2',
         environmentVariables: {
           AWS_REGION: region,
           WASP_TABLE: this.table.name,
@@ -334,7 +344,7 @@ export class WaspAgent extends $util.ComponentResource {
         handler: 'index.handler',
         code: new $util.asset.AssetArchive({ 'index.mjs': new $util.asset.FileAsset(path.join(pkg, 'assets', 'waker', 'index.mjs')) }),
         role: wakerRole.arn,
-        // A cold microVM takes 10-15 s to answer its first invocation.
+        // A cold microVM answers its first invocation in a few seconds on V2, 10-15 s on V1.
         timeout: 120,
         memorySize: 256,
         environment: {

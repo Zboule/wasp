@@ -71,6 +71,12 @@ Putting an agent in a product is mostly not about the model. It is about what ha
    `now` interrupts it.
 4. What the agent says and does is written to the feed as it happens. Your UI polls it through your API.
 
+A thread's microVM stays up while it is used, and AgentCore ends it after 15 idle minutes; the next message
+gets a new one, which reads the transcript back from S3. On AgentCore's platform **V2** (`WaspAgent`'s
+default) a new microVM is restored from a snapshot taken once the runner has warmed up: in the demo, a
+resumed thread's turn starts about 5 s after the message is posted, where V1, which boots the image, took
+16-19 s. The first sessions after a deploy are slower (20-30 s) while AgentCore's hosts cache the snapshot.
+
 ## Packages
 
 | Package | Runs in | What it is |
@@ -96,7 +102,7 @@ aws ssm put-parameter --name /my-app/claude --type SecureString \
 ```ts
 providers: {
   aws: { region: 'eu-west-1' },
-  'aws-native': { version: '1.72.0', region: 'eu-west-1' },
+  'aws-native': { version: '1.82.0', region: 'eu-west-1' },   // 1.82.0 or later: platformVersion
   'docker-build': '0.0.14',
   time: '0.1.1'
 }
@@ -116,7 +122,8 @@ Your agent is a folder: `agent/prompt.md` is appended to the Claude Code system 
 ```
 
 `WaspAgent`'s args (`model`, `maxTurns`, `maxBudgetUsd`, `tools`, `disallowedTools`, `mcpServers`) override
-the file, and take outputs (a URL per stage, say).
+the file, and take outputs (a URL per stage, say). They reach the runtime as environment variables, which V2
+caps at 2.5 KB in all: keep long lists in the file. `platform: 'V1'` keeps the previous platform.
 
 ### Skills
 
@@ -182,7 +189,7 @@ wasp is **experimental (0.x)**: it runs end to end in a private demo, and its AP
 
 Done: queue with `later` / `asap` / `now`, interrupt, file uploads (user → agent), durable AG-UI feed with cursor paging, transcript
 persistence and resume, per-thread credentials, large-output offload to S3, credential refresh, self-healing
-wake-ups, MCP servers called as the caller (per-turn identity), `wasp.config.json`, a React chat (Markdown, queue with cancel and edit, send and stop in the input) with themes, and an embed.
+wake-ups, MCP servers called as the caller (per-turn identity), `wasp.config.json`, AgentCore platform V2 (snapshot starts), a React chat (Markdown, queue with cancel and edit, send and stop in the input) with themes, and an embed.
 
 Next:
 - Live nudges (AppSync Events) on top of polling

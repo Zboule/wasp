@@ -46,6 +46,29 @@ ever holds credentials scoped to its own thread.
 | User files | uploaded by the browser with a presigned POST for one key, `payloads/<threadId>/files/<fileId>/<name>`, signed by the app's role (`s3:PutObject` on `payloads/*/files/*` only). Inside the thread's own prefix, so the session policy is unchanged. Downloads are presigned with `Content-Disposition: attachment`, so an uploaded page never runs on the bucket's origin. | IAM, S3 POST policy |
 | Tool payloads (`outputRef`, `argsRef`) | written by the agent under `payloads/<threadId>/`, with any content type it chooses. Presigned with `Content-Type: text/plain; charset=utf-8`, so they open as text in a tab and an agent-written page never runs on the bucket's origin. | the client's presign |
 
+## Snapshots (platform V2)
+
+On V2, AgentCore starts the image once per runtime version, waits for a healthy
+`/ping`, snapshots the microVM, and restores that snapshot for every new
+session. Anything a process held at that moment is in every thread's microVM,
+including the state of its random-number generators: AWS documents that
+OpenSSL is not reseeded after a restore, and two sessions restored from one
+snapshot drew the same `crypto.randomUUID()` and `randomBytes()` in our tests
+(only `/dev/urandom` differed).
+
+So nothing that must be unique or secret runs before the snapshot:
+
+| Process | Before the snapshot | After the restore |
+|---|---|---|
+| launcher (PID 1, `launcher.ts`) | starts the warm-up, then answers `/ping` | forwards `/ping` and `/invocations` to the runner. Keeps nothing, opens no outbound connection, draws no random number |
+| warm-up (a runner process with `WASP_WARM_UP=1`) | loads the runner and starts the Claude CLI to its handshake, with no credential, no MCP server, no thread and a throwaway config folder; waits for the CLI to exit, then exits | gone |
+| runner | not started | started on the first invocation, so its random state, TLS keys and ids are its own |
+
+The warm-up only puts files into memory (the CLI is a 240 MB binary that a
+restored microVM otherwise pages in from remote storage on the first turn). It
+never sees a thread's credentials or caller tokens, which only ever reach the
+runner (invariant 7 in `CLAUDE.md`).
+
 Refs the client signs: the agent can write its own feed and queue, so any
 S3 key stored there (a file's `ref`, a tool result's `outputRef` or `argsRef`)
 is agent-written, while the app's role, which signs download URLs, reads the

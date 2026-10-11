@@ -4,6 +4,7 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { createDynamoStore } from '@zboule/wasp-store';
 import { readFileSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
 import { hostname } from 'node:os';
 
 import { callerIdentity } from './caller.ts';
@@ -11,7 +12,7 @@ import { loadConfig } from './config.ts';
 import { createS3Files } from './files.ts';
 import { createMcpProxy } from './mcpProxy.ts';
 import { createS3SessionStore } from './s3SessionStore.ts';
-import { sdkAgent, threadWorkDir } from './sdkAgent.ts';
+import { type SdkAgentConfig, sdkAgent, threadWorkDir, warmUpCli } from './sdkAgent.ts';
 import { type ThreadCredentials, createRunnerServer } from './server.ts';
 
 /**
@@ -33,6 +34,24 @@ const systemPrompt = systemPromptFile ? readFileSync(systemPromptFile, 'utf8') :
 /** Set by the image when the definition has a `skills/` folder. */
 const pluginDir = process.env.WASP_PLUGIN_DIR;
 const config = loadConfig(process.env, (file) => readFileSync(file, 'utf8'));
+
+/** The agent as every thread runs it. */
+const agentConfig: SdkAgentConfig = {
+  model: config.model,
+  workDir,
+  ...(systemPrompt ? { systemPrompt } : {}),
+  maxTurns: config.maxTurns,
+  maxBudgetUsd: config.maxBudgetUsd,
+  ...(config.tools ? { tools: config.tools } : {}),
+  ...(config.disallowedTools ? { disallowedTools: config.disallowedTools } : {}),
+  ...(pluginDir ? { pluginDir } : {})
+};
+
+if (process.env.WASP_WARM_UP === '1') {
+  // Run by the launcher before the microVM is snapshotted (launcher.ts): load, warm, leave.
+  await warmUpCli(agentConfig);
+  process.exit(0);
+}
 
 // One microVM serves one thread, so one proxy and one current caller token.
 const proxy = config.mcpServers ? createMcpProxy(config.mcpServers) : undefined;
@@ -76,22 +95,21 @@ const server = createRunnerServer({
           }
         : {}),
       agent: sdkAgent({
-        model: config.model,
-        workDir,
+        ...agentConfig,
         sessionStore: createS3SessionStore({ client: s3, bucket, threadId }),
         claude,
-        ...(systemPrompt ? { systemPrompt } : {}),
-        maxTurns: config.maxTurns,
-        maxBudgetUsd: config.maxBudgetUsd,
         // The SDK sees only the local proxy URLs: no token in its configuration.
         ...(mcpServers ? { mcpServers } : {}),
-        ...(config.tools ? { tools: config.tools } : {}),
-        ...(config.disallowedTools ? { disallowedTools: config.disallowedTools } : {}),
-        ...(pluginDir ? { pluginDir } : {})
+        ...(config.mcpServers ? { callerMcpServers: Object.keys(config.mcpServers).filter((name) => config.mcpServers![name]!.auth === 'caller') } : {})
       })
     };
   }
 });
 
-const port = Number(env('PORT', '8080'));
-server.listen(port, '0.0.0.0', () => console.log(`wasp runner listening on :${port}`));
+if (process.send) {
+  // Started by the launcher: localhost only, on a free port it forwards to.
+  server.listen(0, '127.0.0.1', () => process.send!({ port: (server.address() as AddressInfo).port }));
+} else {
+  const port = Number(env('PORT', '8080'));
+  server.listen(port, '0.0.0.0', () => console.log(`wasp runner listening on :${port}`));
+}

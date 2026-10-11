@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { drain } from './drain.ts';
 import { type ThreadStore, createMemoryStore } from '@zboule/wasp-store';
-import { type Script, gate, scriptedAgent } from './testing/scriptedAgent.ts';
+import { type Script, type SessionHooks, gate, scriptedAgent } from './testing/scriptedAgent.ts';
 
 const T = 'thread-1';
 let clock = 1_000;
@@ -45,9 +45,9 @@ const until = async (condition: () => Promise<boolean>) => {
   throw new Error('condition never held');
 };
 
-function setup(script?: Script, extra: Partial<Parameters<typeof drain>[1]> = {}) {
+function setup(script?: Script, extra: Partial<Parameters<typeof drain>[1]> = {}, hooks: SessionHooks = {}) {
   const store = createMemoryStore();
-  const { agent, sent } = scriptedAgent(script);
+  const { agent, sent } = scriptedAgent(script, hooks);
   const run = (owner = 'runner-a') => drain(T, { store, agent, owner, now, pollMs: 2, leaseMs: 1_000, ...extra });
   const feed = async () => story(await store.feed(T));
   return { store, sent, run, feed };
@@ -282,7 +282,7 @@ describe('drain', () => {
     /** What the MCP calls would carry at each delivery: the useCaller hook, as the runner wires it. */
     function identities() {
       const tokens: (string | undefined)[] = [];
-      const useCaller = async (m: { callerToken?: string }) => {
+      const useCaller = async (m: { callerToken?: string }, _joining?: boolean) => {
         if (m.callerToken === 'cipher(broken)') return { ok: false as const, reason: 'invalid' as const };
         tokens.push(m.callerToken);
         return { ok: true as const };
@@ -344,6 +344,52 @@ describe('drain', () => {
       await postAs(store, 'hello', 'user:1');
       await run();
       expect(JSON.stringify(await store.feed(T))).not.toContain('cipher(');
+    });
+
+    it('puts the first message’s caller in place before the agent opens, since it connects to MCP as it opens', async () => {
+      const { tokens, useCaller } = identities();
+      const atOpen: (string | undefined)[][] = [];
+      const { store, run } = setup(undefined, { useCaller }, { onOpen: () => atOpen.push([...tokens]) });
+      await postAs(store, 'hello', 'user:1');
+      await run();
+      expect(atOpen).toEqual([['cipher(user:1)']]);
+      // Resolved once: the first delivery reuses it.
+      expect(tokens).toEqual(['cipher(user:1)']);
+    });
+
+    it('reconnects the caller MCP servers when a turn acts for someone else, and only then', async () => {
+      const { useCaller } = identities();
+      const events: string[] = [];
+      const { store, run } = setup(
+        (text) => [{ say: `echo:${text}` }],
+        { useCaller: async (m, joining) => (events.push(`caller:${m.principal ?? 'none'}`), useCaller(m, joining)) },
+        { onOpen: () => events.push('open'), onReconnectCallerMcp: () => events.push('reconnect') }
+      );
+      await postAs(store, 'a1', 'alice');
+      await postAs(store, 'a2', 'alice');
+      await postAs(store, 'b1', 'bob');
+      await post(store, 'anonymous');
+      await run();
+      expect(events).toEqual([
+        'caller:alice',
+        'open',
+        'caller:alice',
+        'caller:bob',
+        'reconnect',
+        'caller:none',
+        'reconnect'
+      ]);
+    });
+
+    it('connects without a token when the first message’s token cannot be used, and reconnects for the next caller', async () => {
+      const { useCaller } = identities();
+      const events: string[] = [];
+      const { store, run, feed } = setup(undefined, { useCaller }, { onOpen: () => events.push('open'), onReconnectCallerMcp: () => events.push('reconnect') });
+      await postAs(store, 'bad', 'broken');
+      await postAs(store, 'good', 'user:1');
+      await run();
+      expect(events).toEqual(['open', 'reconnect']);
+      expect(await feed()).toEqual(['! wasp.message_failed', '> good', 'run', 'echo:good', 'done']);
     });
 
     it('closes the session when the first delivery throws', async () => {

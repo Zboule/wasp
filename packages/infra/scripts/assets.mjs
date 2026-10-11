@@ -1,5 +1,5 @@
 // Builds what ships inside @zboule/wasp-infra besides its code:
-//   image/              the runner image context (bundled engine, Dockerfile, the Agent SDK pin and its lockfile)
+//   image/              the runner image context (bundled engine and launcher, Dockerfile, the Agent SDK pin and its lockfile)
 //   assets/waker/       the waker Lambda, one bundled file
 import { build } from 'esbuild';
 import { cpSync, mkdirSync, rmSync } from 'node:fs';
@@ -20,6 +20,16 @@ await build({
   outfile: 'image/runner.mjs',
   external: ['@anthropic-ai/claude-agent-sdk'],
   banner: { js: requireShim },
+  logLevel: 'warning'
+});
+// The image's entry point: warms up, then starts the runner after a V2 restore (runner/src/launcher.ts).
+await build({
+  entryPoints: [`${runner}/src/launcherMain.ts`],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node24',
+  outfile: 'image/launcher.mjs',
   logLevel: 'warning'
 });
 cpSync(`${runner}/image/Dockerfile`, 'image/Dockerfile');

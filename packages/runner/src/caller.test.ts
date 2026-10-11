@@ -16,7 +16,7 @@ const message = (callerToken?: string): StoredMessage => ({
 afterEach(() => vi.restoreAllMocks());
 
 describe('caller identity', () => {
-  it('uses the decrypted token, clears it for a message without one, and refuses an expired JWT', async () => {
+  it('uses the decrypted token, clears it for a message without one or with an expired JWT', async () => {
     const tokens: (string | undefined)[] = [];
     const use = callerIdentity({ decrypt: async (c) => c.replace('enc:', ''), setToken: (t) => tokens.push(t), now: () => 2_000_000 });
 
@@ -24,7 +24,14 @@ describe('caller identity', () => {
     expect(await use(message())).toEqual({ ok: true });
     expect(await use(message(`enc:${jwt(1_000)}`))).toEqual({ ok: false, reason: 'token_expired' });
     expect(await use(message('enc:opaque-token'))).toEqual({ ok: true });
-    expect(tokens).toEqual([undefined, jwt(3_000), undefined, undefined, undefined, 'opaque-token']);
+    expect(tokens).toEqual([jwt(3_000), undefined, undefined, 'opaque-token']);
+  });
+
+  it('leaves the running turn its credential when a message joining it has a token that cannot be used', async () => {
+    const tokens: (string | undefined)[] = [];
+    const use = callerIdentity({ decrypt: async (c) => c.replace('enc:', ''), setToken: (t) => tokens.push(t), now: () => 2_000_000 });
+    expect(await use(message(`enc:${jwt(1_000)}`), true)).toEqual({ ok: false, reason: 'token_expired' });
+    expect(tokens).toEqual([]);
   });
 
   it('fails a token it cannot decrypt, and never logs a token', async () => {
