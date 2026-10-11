@@ -65,6 +65,10 @@ So nothing that must be unique or secret runs before the snapshot:
 | warm-up (a runner process with `WASP_WARM_UP=1`) | loads the runner and starts the Claude CLI to its handshake, with no credential, no MCP server, no thread and a throwaway config folder. Runs as its own process group, killed as a whole when it is done or after 90 s | gone |
 | runner | not started | started by the first `POST /invocations`, so its random state, TLS keys and ids are its own |
 
+Checked on a deployed stack: each runner logs `wasp runner: instance <uuid>`, the first random value it
+draws, and the demo's e2e asserts that two new threads, and one thread before and after its microVM is
+stopped, log different ones.
+
 The warm-up only puts files into memory (the CLI is a 240 MB binary that a
 restored microVM otherwise pages in from remote storage on the first turn). It
 never sees a thread's credentials or caller tokens, which only ever reach the

@@ -54,6 +54,10 @@ if (process.env.WASP_WARM_UP === '1') {
   process.exit(0);
 }
 
+// The first random value this process draws, at the same point in every runner: microVMs restored from
+// one snapshot log different ones only if their random state is their own (CLAUDE.md, invariant 7).
+console.log(`wasp runner: instance ${crypto.randomUUID()}`);
+
 // One microVM serves one thread, so one proxy and one current caller token.
 const proxy = config.mcpServers ? createMcpProxy(config.mcpServers) : undefined;
 const mcpServers = proxy ? await proxy.start() : undefined;
