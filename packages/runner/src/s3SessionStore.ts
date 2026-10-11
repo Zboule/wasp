@@ -3,8 +3,6 @@ import type { SessionKey, SessionStore, SessionStoreEntry } from '@anthropic-ai/
 
 /** Merge a session's chunks into one once there are more than this many. */
 const COMPACT_AFTER = 50;
-/** Chunks fetched at once on load: one by one, 50 chunks took ~1.3 s in a microVM; in parallel, ~0.1 s. */
-const PARALLEL_READS = 16;
 
 /**
  * The Agent SDK transcript, mirrored to S3 so any microVM can resume a thread.
@@ -60,26 +58,13 @@ export function createS3SessionStore({ client, bucket, threadId }: { client: S3C
       })
     );
 
-  /** In chunk order, PARALLEL_READS at a time. */
-  async function readAll(chunks: string[]): Promise<SessionStoreEntry[][]> {
-    const out: SessionStoreEntry[][] = new Array(chunks.length);
-    let next = 0;
-    const worker = async () => {
-      while (next < chunks.length) {
-        const i = next++;
-        out[i] = await read(chunks[i]!);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(PARALLEL_READS, chunks.length) }, worker));
-    return out;
-  }
-
   async function loadFrom(prefix: string): Promise<SessionStoreEntry[] | null> {
     const chunks = await list(prefix);
     if (!chunks.length) return null;
     const seen = new Set<string>();
     const entries: SessionStoreEntry[] = [];
-    for (const chunkEntries of await readAll(chunks)) {
+    // In parallel: one by one, 50 chunks took ~1.3 s in a microVM, ~0.1 s at once. Compaction keeps them few.
+    for (const chunkEntries of await Promise.all(chunks.map(read))) {
       for (const entry of chunkEntries) {
         if (entry.uuid) {
           if (seen.has(entry.uuid)) continue;
@@ -100,16 +85,23 @@ export function createS3SessionStore({ client, bucket, threadId }: { client: S3C
     return entries;
   }
 
-  /** The last load of each prefix, and how many appends each prefix has had (a load that raced an append is not kept). */
+  /** The last load of each prefix, and a count of appends started or finished on it: a load that overlapped one is not kept. */
   const lastLoad = new Map<string, SessionStoreEntry[] | null>();
   const appends = new Map<string, number>();
+  const touched = (prefix: string) => {
+    appends.set(prefix, (appends.get(prefix) ?? 0) + 1);
+    lastLoad.delete(prefix);
+  };
 
   return {
     async append(key, entries) {
       const prefix = base(key);
-      appends.set(prefix, (appends.get(prefix) ?? 0) + 1);
-      lastLoad.delete(prefix);
-      if (entries.length) await put(prefix + chunkName(), entries);
+      touched(prefix);
+      try {
+        if (entries.length) await put(prefix + chunkName(), entries);
+      } finally {
+        touched(prefix);
+      }
     },
 
     async load(key) {

@@ -80,8 +80,15 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   if (!first) return;
   // An interrupt asked for while nothing ran must not kill this session's first turn.
   await store.takeInterrupt(threadId);
+  /** Each message's caller is resolved once: the first one before the agent opens, the rest as they come. */
+  const callers = new Map<string, CallerResult>();
+  const callerFor = async (message: StoredMessage, joining: boolean): Promise<CallerResult> => {
+    let caller = callers.get(message.id);
+    if (!caller) callers.set(message.id, (caller = (await deps.useCaller?.(message, joining)) ?? { ok: true }));
+    return caller;
+  };
   // The agent connects to its MCP servers as it opens: the first message's caller must already be in place.
-  const firstCaller = (await deps.useCaller?.(first, false)) ?? { ok: true };
+  const firstCaller = await callerFor(first, false);
   const [session] = await Promise.all([agent.open(threadId), deps.files?.restoreAll()]);
   /** Whose token the caller MCP servers connected with (undefined: none). */
   let mcpPrincipal = firstCaller.ok ? callerOf(first) : undefined;
@@ -100,10 +107,10 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
     return next;
   };
 
-  const deliver = async (message: StoredMessage, priority?: 'next', resolved?: CallerResult): Promise<boolean> => {
+  const deliver = async (message: StoredMessage, priority?: 'next'): Promise<boolean> => {
     // Before the claim: once claimed, the message is the agent's, and its files must already be there.
     if (message.attachments?.length) await deps.files?.fetch(message.attachments);
-    const caller = resolved ?? (await deps.useCaller?.(message, priority === 'next')) ?? { ok: true };
+    const caller = await callerFor(message, priority === 'next');
     if (!(await store.claim(threadId, message.id, now()))) return false;
     if (!caller.ok) {
       // Claimed so it leaves the queue (and its token is deleted), but never shown to the agent.
@@ -112,8 +119,8 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
     }
     if (!priority) {
       turnPrincipal = message.principal;
-      if (deps.useCaller && callerOf(message) !== mcpPrincipal) {
-        await session.reconnectCallerMcp?.();
+      if (callerOf(message) !== mcpPrincipal) {
+        await session.reconnectCallerMcp();
         mcpPrincipal = callerOf(message);
       }
     }
@@ -179,7 +186,7 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
 
   try {
     await serial(async () => {
-      if (!(await deliver(first, undefined, firstCaller))) await startNext();
+      if (!(await deliver(first))) await startNext();
     });
   } catch (error) {
     // Nothing was sent: close the session, or its query stays open.

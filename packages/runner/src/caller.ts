@@ -7,8 +7,9 @@ import type { CallerResult } from './drain.ts';
  * calls that follow (CLAUDE.md, invariant 5): decrypted only for delivery, kept
  * in memory only, never logged, never written to the feed, the transcript or a
  * prompt. A message without a token clears it: a turn never acts with the
- * previous principal's token. A token that cannot be used clears it too, except
- * for a message joining the running turn (`asap`): that turn keeps its credential.
+ * previous principal's token, and neither does one whose token cannot be used.
+ * A message joining the running turn (`asap`, same principal) only ever brings a
+ * fresh valid token: it never takes the turn's credential away.
  */
 export function callerIdentity(deps: {
   /** KMS Decrypt with the thread's own credentials and encryption context. */
@@ -18,12 +19,15 @@ export function callerIdentity(deps: {
 }): (message: StoredMessage, joining?: boolean) => Promise<CallerResult> {
   const now = deps.now ?? Date.now;
   return async (message, joining = false) => {
-    const fail = (reason: 'token_expired' | 'invalid'): CallerResult => {
+    const clear = () => {
       if (!joining) deps.setToken(undefined);
+    };
+    const fail = (reason: 'token_expired' | 'invalid'): CallerResult => {
+      clear();
       return { ok: false, reason };
     };
     if (!message.callerToken) {
-      deps.setToken(undefined);
+      clear();
       return { ok: true };
     }
     let token: string;

@@ -109,7 +109,6 @@ describe('S3 session store (in memory)', () => {
     const fresh = createS3SessionStore({ client: s3.client, bucket: 'b', threadId: 't' });
     expect((await fresh.load(key))?.map((e) => e.uuid)).toEqual(Array.from({ length: 40 }, (_, i) => `e${String(i).padStart(2, '0')}`));
     expect(s3.maxInFlight()).toBeGreaterThan(1);
-    expect(s3.maxInFlight()).toBeLessThanOrEqual(16);
   });
 
   it('answers a second load of the same session from memory, until the next append', async () => {
@@ -132,6 +131,23 @@ describe('S3 session store (in memory)', () => {
     const loading = store.load(key);
     await store.append(key, [entry('b')]);
     await loading;
+    expect((await store.load(key))?.map((e) => e.uuid)).toEqual(['a', 'b']);
+  });
+
+  it('does not keep a load that listed while an append was still being written', async () => {
+    const s3 = fakeS3();
+    const store = createS3SessionStore({ client: s3.client, bucket: 'b', threadId: 't' });
+    await store.append(key, [entry('a')]);
+    let release!: () => void;
+    const slowPut = s3.client.send.bind(s3.client);
+    s3.client.send = (async (command: PutObjectCommand) => {
+      if (command instanceof PutObjectCommand) await new Promise<void>((resolve) => (release = resolve));
+      return slowPut(command);
+    }) as typeof s3.client.send;
+    const appending = store.append(key, [entry('b')]);
+    await store.load(key); // lists before the put lands: sees only 'a'
+    release();
+    await appending;
     expect((await store.load(key))?.map((e) => e.uuid)).toEqual(['a', 'b']);
   });
 

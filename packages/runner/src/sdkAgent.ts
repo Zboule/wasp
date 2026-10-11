@@ -1,6 +1,7 @@
 import {
   type McpServerConfig,
   type Options,
+  type Query,
   type SDKMessage,
   type SDKUserMessage,
   type SessionStore,
@@ -131,6 +132,40 @@ export async function warmUpCli(config: SdkAgentConfig): Promise<void> {
   }
 }
 
+/** How long a caller MCP server may take to reconnect before it is turned off for the turn. */
+const MCP_RECONNECT_MS = 15_000;
+
+/**
+ * Reconnects each server, all at once. One that fails or does not answer in
+ * time is turned off, so it is never left connected as the previous caller;
+ * `off` remembers it, and the next reconnect turns it back on first.
+ */
+export async function reconnectFailClosed(
+  q: Pick<Query, 'reconnectMcpServer' | 'toggleMcpServer'>,
+  names: string[],
+  off: Set<string>,
+  timeoutMs = MCP_RECONNECT_MS
+): Promise<void> {
+  await Promise.all(
+    names.map(async (name) => {
+      try {
+        if (off.delete(name)) await q.toggleMcpServer(name, true);
+        await withTimeout(q.reconnectMcpServer(name), timeoutMs);
+      } catch (error) {
+        off.add(name);
+        await q.toggleMcpServer(name, false).catch(() => undefined);
+        console.error(`wasp: MCP server ${name} is off for this caller: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    })
+  );
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`no answer in ${ms} ms`)), ms)));
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /** Resolves once the process has exited, killing it if it has not within `ms`. */
 async function exited(child: ChildProcess | undefined, ms: number): Promise<void> {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
@@ -170,15 +205,15 @@ export function sdkAgent(config: SdkAgentConfig): Agent {
 
       const debug = process.env.WASP_DEBUG ? (m: SDKMessage) => console.error('[sdk]', describe(m)) : undefined;
       let announced = false;
+      /** Caller MCP servers turned off because they did not reconnect for the current caller. */
+      const mcpOff = new Set<string>();
       async function* events(): AsyncGenerator<AgentEvent> {
         try {
           for await (const message of q) {
             debug?.(message);
             if (!announced && message.type === 'system' && message.subtype === 'init') {
-              // One line per session: where a slow first turn went, and whether each MCP server connected.
               announced = true;
-              const mcp = message.mcp_servers.map((m) => `${m.name}=${m.status}`).join(' ') || 'none';
-              console.log(`wasp: thread ${threadId} ${existing ? 'resumed' : 'started'}: transcript ${infoMs} ms, CLI ready ${Date.now() - opened} ms; MCP ${mcp}`);
+              logSessionStart(threadId, existing ? 'resumed' : 'started', { transcriptMs: infoMs, readyMs: Date.now() - opened }, message.mcp_servers);
             }
             yield* toAgentEvents(message, state);
             if (message.type === 'result') state.interrupting = false;
@@ -207,16 +242,7 @@ export function sdkAgent(config: SdkAgentConfig): Agent {
         end() {
           input.close();
         },
-        async reconnectCallerMcp() {
-          for (const name of config.callerMcpServers ?? []) {
-            try {
-              await q.reconnectMcpServer(name);
-            } catch (error) {
-              // A server that refuses this caller (or no caller) is simply not available to the turn.
-              console.error(`wasp: MCP server ${name} did not reconnect: ${error instanceof Error ? error.message : String(error)}`);
-            }
-          }
-        },
+        reconnectCallerMcp: () => reconnectFailClosed(q, config.callerMcpServers ?? [], mcpOff),
         events: events()
       };
       return session;
@@ -268,6 +294,12 @@ export function toAgentEvents(message: SDKMessage, state: MappingState): AgentEv
     default:
       return [];
   }
+}
+
+/** One line per session: where a slow first turn went, and whether each MCP server connected. */
+function logSessionStart(threadId: string, how: 'started' | 'resumed', ms: { transcriptMs: number; readyMs: number }, mcp: { name: string; status: string }[]) {
+  const servers = mcp.map((m) => `${m.name}=${m.status}`).join(' ') || 'none';
+  console.log(`wasp: thread ${threadId} ${how}: transcript ${ms.transcriptMs} ms, CLI ready ${ms.readyMs} ms; MCP ${servers}`);
 }
 
 function describe(m: SDKMessage): string {

@@ -1,7 +1,7 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { type MappingState, pluginOptions, toAgentEvents } from './sdkAgent.ts';
+import { type MappingState, pluginOptions, reconnectFailClosed, toAgentEvents } from './sdkAgent.ts';
 
 const sdk = (m: unknown) => m as SDKMessage;
 const fresh = (): MappingState => ({ interrupting: false, sessionCostUsd: 0 });
@@ -89,5 +89,41 @@ describe('pluginOptions', () => {
 
   it('adds nothing when the definition has no skills', () => {
     expect(pluginOptions(undefined)).toEqual({});
+  });
+});
+
+describe('reconnectFailClosed', () => {
+  function fakeQuery(behaviour: Record<string, 'ok' | 'fail' | 'hang'>) {
+    const calls: string[] = [];
+    return {
+      calls,
+      q: {
+        async reconnectMcpServer(name: string) {
+          calls.push(`reconnect ${name}`);
+          if (behaviour[name] === 'fail') throw new Error('401');
+          if (behaviour[name] === 'hang') await new Promise(() => undefined);
+        },
+        async toggleMcpServer(name: string, enabled: boolean) {
+          calls.push(`${enabled ? 'on' : 'off'} ${name}`);
+        }
+      }
+    };
+  }
+
+  it('turns off a server that refuses or does not answer, never leaving it connected as the previous caller', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { q, calls } = fakeQuery({ app: 'fail', slow: 'hang', fine: 'ok' });
+    const off = new Set<string>();
+    await reconnectFailClosed(q, ['app', 'slow', 'fine'], off, 20);
+    expect([...off].sort()).toEqual(['app', 'slow']);
+    expect(calls.filter((c) => c.startsWith('off')).sort()).toEqual(['off app', 'off slow']);
+  });
+
+  it('turns a server back on before the next reconnect', async () => {
+    const { q, calls } = fakeQuery({ app: 'ok' });
+    const off = new Set(['app']);
+    await reconnectFailClosed(q, ['app'], off, 20);
+    expect(calls).toEqual(['on app', 'reconnect app']);
+    expect(off.size).toBe(0);
   });
 });

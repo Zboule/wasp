@@ -9,6 +9,7 @@ import { hostname } from 'node:os';
 
 import { callerIdentity } from './caller.ts';
 import { loadConfig } from './config.ts';
+import type { RunnerReady } from './launcher.ts';
 import { createS3Files } from './files.ts';
 import { createMcpProxy } from './mcpProxy.ts';
 import { createS3SessionStore } from './s3SessionStore.ts';
@@ -100,16 +101,16 @@ const server = createRunnerServer({
         claude,
         // The SDK sees only the local proxy URLs: no token in its configuration.
         ...(mcpServers ? { mcpServers } : {}),
-        ...(config.mcpServers ? { callerMcpServers: Object.keys(config.mcpServers).filter((name) => config.mcpServers![name]!.auth === 'caller') } : {})
+        ...(proxy ? { callerMcpServers: proxy.callerServers } : {})
       })
     };
   }
 });
 
-if (process.send) {
-  // Started by the launcher: localhost only, on a free port it forwards to.
-  server.listen(0, '127.0.0.1', () => process.send!({ port: (server.address() as AddressInfo).port }));
-} else {
-  const port = Number(env('PORT', '8080'));
-  server.listen(port, '0.0.0.0', () => console.log(`wasp runner listening on :${port}`));
-}
+// Started by the launcher (launcher.ts), on the first invocation: localhost only, on a free port it forwards to.
+const launcher = process.send?.bind(process);
+if (!launcher) throw new Error('wasp: runner.mjs runs under launcher.mjs');
+server.listen(0, '127.0.0.1', () => {
+  const ready: RunnerReady = { port: (server.address() as AddressInfo).port };
+  launcher(ready);
+});

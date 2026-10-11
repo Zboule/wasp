@@ -45,10 +45,12 @@ that only works if the agent behaves is not secure.
    after startup: whatever a process held then is cloned into every microVM,
    random-number state included (measured: two sessions drew the same
    `crypto.randomUUID()`). So the image's first process (`launcher.ts`) only
-   warms up, with no credential, and forwards requests; the runner, which holds
-   credentials and talks TLS, starts after the restore, on the first invocation.
-   Never start the runner, a CLI process, or anything holding a credential,
-   a connection or randomness before the first invocation.
+   warms up and forwards requests: the warm-up (the runner and the CLI, with no
+   credential) runs as a process group that is killed before the launcher
+   reports healthy, and the runner that serves threads starts only on a
+   `POST /invocations`, after the restore. Nothing started before the snapshot
+   may still be running when it is taken, and nothing holding a credential, a
+   connection or randomness may start before an invocation.
 8. **Accepted risks** (by design, not bugs, see `docs/security-model.md`): a
    compromised agent can alter anything in its **own** thread (queue, feed,
    transcript), leak its own thread's data, read the caller token of the turn it

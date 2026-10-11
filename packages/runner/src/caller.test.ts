@@ -27,11 +27,14 @@ describe('caller identity', () => {
     expect(tokens).toEqual([jwt(3_000), undefined, undefined, 'opaque-token']);
   });
 
-  it('leaves the running turn its credential when a message joining it has a token that cannot be used', async () => {
+  it('never takes the credential away from the running turn for a message joining it, only refreshes it', async () => {
     const tokens: (string | undefined)[] = [];
     const use = callerIdentity({ decrypt: async (c) => c.replace('enc:', ''), setToken: (t) => tokens.push(t), now: () => 2_000_000 });
     expect(await use(message(`enc:${jwt(1_000)}`), true)).toEqual({ ok: false, reason: 'token_expired' });
+    expect(await use(message(), true)).toEqual({ ok: true });
     expect(tokens).toEqual([]);
+    expect(await use(message(`enc:${jwt(3_000)}`), true)).toEqual({ ok: true });
+    expect(tokens).toEqual([jwt(3_000)]);
   });
 
   it('fails a token it cannot decrypt, and never logs a token', async () => {
