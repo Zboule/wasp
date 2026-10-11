@@ -392,6 +392,20 @@ describe('drain', () => {
       expect(await feed()).toEqual(['! wasp.message_failed', '> good', 'run', 'echo:good', 'done']);
     });
 
+    it('keeps a message queued when the caller MCP servers cannot follow its caller', async () => {
+      const { useCaller } = identities();
+      const { store, sent, run } = setup(undefined, { useCaller }, {
+        onReconnectCallerMcp: () => {
+          throw new Error('cannot turn the server off');
+        }
+      });
+      await postAs(store, 'a1', 'alice');
+      await postAs(store, 'b1', 'bob');
+      await expect(run()).rejects.toThrow('cannot turn the server off');
+      expect(sent.map((m) => m.text)).toEqual(['a1']);
+      expect((await store.pending(T)).map((m) => m.text)).toEqual(['b1']);
+    });
+
     it('closes the session when the first delivery throws', async () => {
       const { store, sent, run } = setup(undefined, {
         useCaller: async () => {

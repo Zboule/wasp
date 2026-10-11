@@ -119,6 +119,15 @@ describe('reconnectFailClosed', () => {
     expect(calls.filter((c) => c.startsWith('off')).sort()).toEqual(['off app', 'off slow']);
   });
 
+  it('throws when a server can be neither reconnected nor turned off', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const q = {
+      reconnectMcpServer: async () => Promise.reject(new Error('401')),
+      toggleMcpServer: async () => Promise.reject(new Error('CLI gone'))
+    };
+    await expect(reconnectFailClosed(q, ['app'], new Set(), 20)).rejects.toThrow('CLI gone');
+  });
+
   it('turns a server back on before the next reconnect', async () => {
     const { q, calls } = fakeQuery({ app: 'ok' });
     const off = new Set(['app']);

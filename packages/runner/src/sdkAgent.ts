@@ -138,7 +138,8 @@ const MCP_RECONNECT_MS = 15_000;
 /**
  * Reconnects each server, all at once. One that fails or does not answer in
  * time is turned off, so it is never left connected as the previous caller;
- * `off` remembers it, and the next reconnect turns it back on first.
+ * `off` remembers it, and the next reconnect turns it back on first. Throws
+ * only when a server can be neither reconnected nor turned off.
  */
 export async function reconnectFailClosed(
   q: Pick<Query, 'reconnectMcpServer' | 'toggleMcpServer'>,
@@ -149,11 +150,12 @@ export async function reconnectFailClosed(
   await Promise.all(
     names.map(async (name) => {
       try {
-        if (off.delete(name)) await q.toggleMcpServer(name, true);
+        if (off.delete(name)) await withTimeout(q.toggleMcpServer(name, true), timeoutMs);
         await withTimeout(q.reconnectMcpServer(name), timeoutMs);
       } catch (error) {
         off.add(name);
-        await q.toggleMcpServer(name, false).catch(() => undefined);
+        // If even this fails, the error goes up: the turn must not run with the previous caller's session.
+        await withTimeout(q.toggleMcpServer(name, false), timeoutMs);
         console.error(`wasp: MCP server ${name} is off for this caller: ${error instanceof Error ? error.message : String(error)}`);
       }
     })

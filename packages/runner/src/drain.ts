@@ -80,15 +80,9 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   if (!first) return;
   // An interrupt asked for while nothing ran must not kill this session's first turn.
   await store.takeInterrupt(threadId);
-  /** Each message's caller is resolved once: the first one before the agent opens, the rest as they come. */
-  const callers = new Map<string, CallerResult>();
-  const callerFor = async (message: StoredMessage, joining: boolean): Promise<CallerResult> => {
-    let caller = callers.get(message.id);
-    if (!caller) callers.set(message.id, (caller = (await deps.useCaller?.(message, joining)) ?? { ok: true }));
-    return caller;
-  };
+  const useCaller = async (message: StoredMessage, joining: boolean): Promise<CallerResult> => (await deps.useCaller?.(message, joining)) ?? { ok: true };
   // The agent connects to its MCP servers as it opens: the first message's caller must already be in place.
-  const firstCaller = await callerFor(first, false);
+  const firstCaller = await useCaller(first, false);
   const [session] = await Promise.all([agent.open(threadId), deps.files?.restoreAll()]);
   /** Whose token the caller MCP servers connected with (undefined: none). */
   let mcpPrincipal = firstCaller.ok ? callerOf(first) : undefined;
@@ -110,20 +104,20 @@ async function runSession(threadId: string, deps: DrainDeps): Promise<void> {
   const deliver = async (message: StoredMessage, priority?: 'next'): Promise<boolean> => {
     // Before the claim: once claimed, the message is the agent's, and its files must already be there.
     if (message.attachments?.length) await deps.files?.fetch(message.attachments);
-    const caller = await callerFor(message, priority === 'next');
+    // The first message's caller was put in place before the agent opened, and nothing ran since.
+    const caller = message === first ? firstCaller : await useCaller(message, priority === 'next');
+    // Before the claim: if the caller MCP servers cannot follow, the message stays queued.
+    if (caller.ok && !priority && callerOf(message) !== mcpPrincipal) {
+      await session.reconnectCallerMcp();
+      mcpPrincipal = callerOf(message);
+    }
     if (!(await store.claim(threadId, message.id, now()))) return false;
     if (!caller.ok) {
       // Claimed so it leaves the queue (and its token is deleted), but never shown to the agent.
       await store.append(threadId, [{ type: 'CUSTOM', name: 'wasp.message_failed', value: { messageId: message.id, reason: caller.reason } }], now());
       return false;
     }
-    if (!priority) {
-      turnPrincipal = message.principal;
-      if (callerOf(message) !== mcpPrincipal) {
-        await session.reconnectCallerMcp();
-        mcpPrincipal = callerOf(message);
-      }
-    }
+    if (!priority) turnPrincipal = message.principal;
     const { id: messageId, text, deliver: mode, attachments } = message;
     await store.append(
       threadId,

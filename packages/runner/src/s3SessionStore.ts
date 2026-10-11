@@ -63,7 +63,8 @@ export function createS3SessionStore({ client, bucket, threadId }: { client: S3C
     if (!chunks.length) return null;
     const seen = new Set<string>();
     const entries: SessionStoreEntry[] = [];
-    // In parallel: one by one, 50 chunks took ~1.3 s in a microVM, ~0.1 s at once. Compaction keeps them few.
+    // In parallel: one by one, 50 chunks took ~1.3 s in a microVM, ~0.1 s at once. A long session can leave
+    // many more until its next load compacts them; the S3 client's connection pool queues what it cannot run at once.
     for (const chunkEntries of await Promise.all(chunks.map(read))) {
       for (const entry of chunkEntries) {
         if (entry.uuid) {

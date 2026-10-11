@@ -152,7 +152,8 @@ An MCP server with `auth: "caller"` gets, on every request, the token of the mes
 await wasp.post(threadId, { text, callerToken: userToken, principal: `user:${userId}` });
 ```
 
-The token is encrypted per thread (KMS) until the runner delivers the message. The agent's MCP calls then go
+`principal` is required with a `callerToken`: it is what tells two callers apart. The token is encrypted per
+thread (KMS) until the runner delivers the message. The agent's MCP calls then go
 through a proxy in the microVM that adds it. A turn keeps the principal it started with: an `asap` message
 from another principal waits for the next turn. For automated work, mint a token for a service account
 scoped to the job rather than passing a person's token: the agent can read the token of the turn it runs.
